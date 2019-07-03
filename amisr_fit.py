@@ -39,14 +39,15 @@ MAX_Z_INT = np.inf
 PARAMETER_RANGE = [0, 3e11]
 PARAMETER_UNITS = 'm$^-3$'
 
-year = 2016
-month = 12
-day = 27
-hour = 22
-minute = 0
+# year = 2016
+# month = 12
+# day = 27
+# hour = 22
+# minute = 0
 
-date = dt.datetime(year,month,day)
+# date = dt.datetime(year,month,day)
 
+FILENAME = '/home/jovyan/mount/data/RISR-N/20171119.001_lp_1min-fitcal.h5'
 radar = 'RISR-N'
 code = 'lp'
 
@@ -761,9 +762,9 @@ class Fit(EvalParam):
 
     # def __init__(self,date=None,radar=None,code=None,param=None):
     def __init__(self,param=None):
-        self.date = date
+#         self.date = date
         self.radar = radar
-        self.code = code
+#         self.code = code
         self.param = param
 
 
@@ -1606,7 +1607,7 @@ class Fit(EvalParam):
             return C
 
 
-    def fit(self,eventlist):
+    def fit(self):
         """
         Perform fit on every event in eventlist.
 
@@ -1622,8 +1623,8 @@ class Fit(EvalParam):
                 eventlist can be created by the generate_eventlist() method of the Fit class
         """
 
-        if not eventlist:
-            raise ValueError('Event list is empty!')
+#         if not eventlist:
+#             raise ValueError('Event list is empty!')
 
 
         time = []
@@ -1638,21 +1639,56 @@ class Fit(EvalParam):
         raw_filename = []
         raw_index = []
 
-        evaluated_modes = {}
+#         evaluated_modes = {}
 
-        mode_dict = {'WorldDay66m':{'maxk':4,'maxl':6,'cap_lim':6.*np.pi/180.,'reglist':['curvature','0thorder'],'regmethod':'chi2','regscalefac':1.0},
-                     'imaginglp':{'maxk':4,'maxl':6,'cap_lim':6.*np.pi/180.,'reglist':['0thorder'],'regmethod':'chi2','regscalefac':np.nan},
-                     'Convection67m':{'maxk':4,'maxl':6,'cap_lim':6.*np.pi/180.,'reglist':['0thorder'],'regmethod':'chi2','regscalefac':np.nan},
-                     'isinglass':{'maxk':4,'maxl':6,'cap_lim':6.*np.pi/180.,'reglist':['0thorder'],'regmethod':'chi2','regscalefac':np.nan}
-                    }
+#         mode_dict = {'WorldDay66m':{'maxk':4,'maxl':6,'cap_lim':6.*np.pi/180.,'reglist':['curvature','0thorder'],'regmethod':'chi2','regscalefac':1.0},
+#                      'imaginglp':{'maxk':4,'maxl':6,'cap_lim':6.*np.pi/180.,'reglist':['0thorder'],'regmethod':'chi2','regscalefac':np.nan},
+#                      'Convection67m':{'maxk':4,'maxl':6,'cap_lim':6.*np.pi/180.,'reglist':['0thorder'],'regmethod':'chi2','regscalefac':np.nan},
+#                      'isinglass':{'maxk':4,'maxl':6,'cap_lim':6.*np.pi/180.,'reglist':['0thorder'],'regmethod':'chi2','regscalefac':np.nan}
+#                     }
+
         
+        self.maxl = LMAX
+        self.maxk = KMAX
+        self.cap_lim = CAPLIMIT
+        self.nbasis = self.maxk*self.maxl**2
+        self.regularization_list = REGULARIZATION_METHOD
+        self.reg_method = REGULARIZATION_PARAMETER_METHOD
+        self.reg_scale_factor = np.nan
 
-        for item in eventlist:
 
-            print item['time']
-            print item['mode']
+#         if radar_mode in evaluated_modes:
+#             reg_matrices = evaluated_modes[radar_mode]
+#             if '0thorder' in self.regularization_list:
+#                 reg_matrices['Tau'] = self.eval_tau(R,ne0,er0)
+#         else:
+#             print 'New mode {}.  Regularization matrices must be evaluated.  This may take a few minutes.'.format(radar_mode)
 
-            R0, ne0, error = self.param.get_data(item['filename'],item['index'])
+        print 'Evaluating Regularization matricies.  This may take a few minutes.'
+        reg_matrices = {}
+        if 'curvature' in self.regularization_list:
+            reg_matrices['Omega'] = self.eval_omega()
+        if '0thorder' in self.regularization_list:
+            reg_matrices['Psi'] = self.eval_psi()
+#             reg_matrices['Tau'] = self.eval_tau(R,ne0,er0)
+#         evaluated_modes[radar_mode] = reg_matrices
+ 
+        
+        
+        # find total number of indicies in the file
+        # file looping/IO is hacky - need to rewrite param.get_data
+        with tables.open_file(FILENAME,'r') as h5file:
+            utime = h5file.get_node('/Time/UnixTime')[:]
+        
+        for index in range(len(utime)):
+
+#         for item in eventlist:
+
+#             print item['time']
+#             print item['mode']
+
+            R0, ne0, error = self.param.get_data(FILENAME,index)
+#             R0, ne0, error = self.param.get_data(item['filename'],item['index'])
 
             # Find convex hull of original data set
             try:
@@ -1666,31 +1702,35 @@ class Fit(EvalParam):
             er0 = error
 
 
-            radar_mode = item['mode'].split('.')[0]
+#             radar_mode = item['mode'].split('.')[0]
 
-            self.maxl = LMAX
-            self.maxk = KMAX
-            self.cap_lim = CAPLIMIT
-            self.nbasis = self.maxk*self.maxl**2
-            self.regularization_list = REGULARIZATION_METHOD
-            self.reg_method = REGULARIZATION_PARAMETER_METHOD
-            self.reg_scale_factor = np.nan
+#             self.maxl = LMAX
+#             self.maxk = KMAX
+#             self.cap_lim = CAPLIMIT
+#             self.nbasis = self.maxk*self.maxl**2
+#             self.regularization_list = REGULARIZATION_METHOD
+#             self.reg_method = REGULARIZATION_PARAMETER_METHOD
+#             self.reg_scale_factor = np.nan
 
 
-            if radar_mode in evaluated_modes:
-                reg_matrices = evaluated_modes[radar_mode]
-                if '0thorder' in self.regularization_list:
-                    reg_matrices['Tau'] = self.eval_tau(R,ne0,er0)
-            else:
-                print 'New mode {}.  Regularization matrices must be evaluated.  This may take a few minutes.'.format(radar_mode)
+#             if radar_mode in evaluated_modes:
+#                 reg_matrices = evaluated_modes[radar_mode]
+#                 if '0thorder' in self.regularization_list:
+#                     reg_matrices['Tau'] = self.eval_tau(R,ne0,er0)
+#             else:
+#                 print 'New mode {}.  Regularization matrices must be evaluated.  This may take a few minutes.'.format(radar_mode)
 
-                reg_matrices = {}
-                if 'curvature' in self.regularization_list:
-                    reg_matrices['Omega'] = self.eval_omega()
-                if '0thorder' in self.regularization_list:
-                    reg_matrices['Psi'] = self.eval_psi()
-                    reg_matrices['Tau'] = self.eval_tau(R,ne0,er0)
-                evaluated_modes[radar_mode] = reg_matrices
+#                 reg_matrices = {}
+#                 if 'curvature' in self.regularization_list:
+#                     reg_matrices['Omega'] = self.eval_omega()
+#                 if '0thorder' in self.regularization_list:
+#                     reg_matrices['Psi'] = self.eval_psi()
+#                     reg_matrices['Tau'] = self.eval_tau(R,ne0,er0)
+#                 evaluated_modes[radar_mode] = reg_matrices
+
+            if '0thorder' in self.regularization_list:
+                reg_matrices['Tau'] = self.eval_tau(R,ne0,er0)
+
 
             if np.any([np.any(np.isnan(v.flatten())) for k, v in reg_matrices.items()]):
                 continue
@@ -1711,7 +1751,8 @@ class Fit(EvalParam):
             c2 = sum((np.squeeze(np.dot(A,C))-np.squeeze(b))**2*np.squeeze(W))
 
             # time.append(item['time'])
-            time.append([item['starttime'],item['endtime']])
+#             time.append([item['starttime'],item['endtime']])
+            time.append(utime[index])
             Coeffs.append(C)
             Covariance.append(dC)
             chi_sq.append(c2)
@@ -1720,8 +1761,10 @@ class Fit(EvalParam):
             raw_coords.append(R0)
             raw_data.append(ne0)
             raw_error.append(error)
-            raw_filename.append(item['filename'])
-            raw_index.append(item['index'])
+#             raw_filename.append(item['filename'])
+#             raw_index.append(item['index'])
+            raw_filename.append(FILENAME)
+            raw_index.append(index)
 
         self.time = time
         self.Coeffs = Coeffs
@@ -1968,6 +2011,7 @@ class AMISR_param(object):
 
 
     def get_data(self,filename,index):
+#     def get_data(self,filename):
         """
         Read a particular index of a processed AMISR hdf5 file and return the coordinates, values, and errors as arrays.
 
@@ -2257,8 +2301,8 @@ def main():
 
     param = AMISR_param('dens')
     dayfit = Fit(param=param)
-    eventlist = dayfit.generate_eventlist()
-    dayfit.fit(eventlist)
+#     eventlist = dayfit.generate_eventlist()
+    dayfit.fit()
     # dayfit.saveh5(filename='test_out.h5')
 
     targtime = dt.datetime(year,month,day,hour,minute)
