@@ -1681,8 +1681,10 @@ class Fit(EvalParam):
             utime = h5file.get_node('/Time/UnixTime')[:]
             
             
-        self.param.get_data2(FILENAME)
-        
+        utime, R0, value, error = self.param.get_data(FILENAME)
+ 
+        print utime.shape, R0.shape, value.shape, error.shape
+    
         for index in range(len(utime)):
 
 #         for item in eventlist:
@@ -2121,22 +2123,22 @@ class AMISR_param(object):
 #         return R0, value, error
 
 
-    def get_data2(self,filename):
+    def get_data(self,filename):
         """
-        Read a particular index of a processed AMISR hdf5 file and return the coordinates, values, and errors as arrays.
+        Read parameter from a processed AMISR hdf5 file and return the time, coordinates, values, and errors as arrays.
 
         Parameters:
             filename: [str]
                 filename/path of processed AMISR hdf5 file
-            index: [int]
-                record index
 
         Returns:
-            R0: [ndarray (npointsx3)]
+            utime: [ndarray (nrecordsx2)]
+                start and end time of each record (Unix Time)
+            R0: [ndarray (3xnpoints)]
                 coordinates of each data point in spherical coordinate system
-            value: [ndarray (npoints)]
+            value: [ndarray (nrecordsxnpoints)]
                 parameter value of each data point
-            error: [ndarray (npoints)]
+            error: [ndarray (nrecordsxnpoints)]
                 error in parameter values
         """
 
@@ -2170,47 +2172,6 @@ class AMISR_param(object):
                 err = h5file.get_node('/FittedParams/Errors')[:,:,:,m,i]
 
 
-#             altitude = alt.read().flatten()
-#             latitude = lat.read().flatten()
-#             longitude = lon.read().flatten()
-# #             arr.reshape(-1, arr.shape[-1])
-#             chi2 = c2[:].reshape(c2[:].shape[0], -1)
-# #             chi2 = c2[index].flatten()
-# #             fitcode = fc[index].flatten()
-#             fitcode = fc[:].reshape(fc[:].shape[0], -1)
-#             imass = imass.read()
-        
-
-
-#             # choose index based on ending of key
-#             if self.key.endswith('_O'):
-#                 j = int(np.where(imass == 16)[0])
-#             elif self.key.endswith('_O2'):
-#                 j = int(np.where(imass == 32)[0])
-#             elif self.key.endswith('_NO'):
-#                 j = int(np.where(imass == 30)[0])
-#             elif self.key.endswith('_N2'):
-#                 j = int(np.where(imass == 28)[0])
-#             elif self.key.endswith('_N'):
-#                 j = int(np.where(imass == 14)[0])
-#             else:
-#                 j = -1
-
-
-#             if self.key == 'dens':
-#                 value = np.array(val[index].flatten())
-#                 error = np.array(err[index].flatten())
-#             if self.key.startswith('frac'):
-#                 value = np.array(fits[index,:,:,j,0].flatten())
-#                 error = np.array(err[index,:,:,j,0].flatten())
-#             if self.key.startswith('temp'):
-#                 value = np.array(fits[index,:,:,j,1].flatten())
-#                 error = np.array(err[index,:,:,j,1].flatten())
-#             if self.key.startswith('colfreq'):
-#                 value = np.array(fits[index,:,:,j,2].flatten())
-#                 error = np.array(err[index,:,:,j,2].flatten())
-
-
         altitude = alt.flatten()
         latitude = lat.flatten()
         longitude = lon.flatten()
@@ -2220,12 +2181,9 @@ class AMISR_param(object):
         value = val.reshape(val.shape[0], -1)
         error = err.reshape(err.shape[0], -1)
 
-        print utime.shape, altitude.shape, chi2.shape, fitcode.shape, value.shape, error.shape
-
         # This accounts for an error in some of the hdf5 files where chi2 is overestimated by 369.
         if np.mean(chi2) > 100.:
             chi2 = chi2 - 369.
-
 
         # data_check: 2D boolian array for removing "bad" data
         # Each column correpsonds to a different "check" condition
@@ -2245,19 +2203,11 @@ class AMISR_param(object):
         value[~finite_indicies] = np.nan
         error[~finite_indicies] = np.nan
         
-#         altitude = np.array(altitude[finite_indicies])
-#         latitude = np.array(latitude[finite_indicies])
-#         longitude = np.array(longitude[finite_indicies])
-#         error = np.array(error[finite_indicies])
-#         value = np.array(value[finite_indicies])
-        
-        print value.shape, error.shape, latitude.shape, longitude.shape, altitude.shape
-
         # Convert input coordinates to geocentric-spherical
         r, t, p = cc.geodetic_to_spherical(latitude,longitude,altitude/1000.)
         R0 = np.array([r,t,p])
 
-        return R0, value, error
+        return utime, R0, value, error
     
     
     def eval_zeroth_order(self,x,data,error):
