@@ -1675,36 +1675,57 @@ class Fit(EvalParam):
  
         
         
-        # find total number of indicies in the file
-        # file looping/IO is hacky - need to rewrite param.get_data
-        with tables.open_file(FILENAME,'r') as h5file:
-            utime = h5file.get_node('/Time/UnixTime')[:]
+#         # find total number of indicies in the file
+#         # file looping/IO is hacky - need to rewrite param.get_data
+#         with tables.open_file(FILENAME,'r') as h5file:
+#             utime = h5file.get_node('/Time/UnixTime')[:]
             
             
         utime, R0, value, error = self.param.get_data(FILENAME)
  
         print utime.shape, R0.shape, value.shape, error.shape
+
+        # Find convex hull of original data set
+        verticies = self.compute_hull(R0)
+#             try:
+#                 vertices = self.compute_hull(R0)
+#             except:
+#                 continue
+
+        # Transform coordinates
+        R0, cp = self.transform_coord(R0)
+#         ne0 = ne0
+#         er0 = error
     
-        for index in range(len(utime)):
+#         for index in range(len(utime)):
+        for ne0, er0 in zip(value,error):
+            print ne0
+            print R0.shape, ne0.shape, er0.shape
+            
+            R = R0[:,np.isfinite(ne0)]
+            er0 = er0[np.isfinite(ne0)]
+            ne0 = ne0[np.isfinite(ne0)]
+
+            print R.shape, ne0.shape, er0.shape
 
 #         for item in eventlist:
 
 #             print item['time']
 #             print item['mode']
 
-            R0, ne0, error = self.param.get_data(FILENAME,index)
+#             R0, ne0, error = self.param.get_data(FILENAME,index)
 #             R0, ne0, error = self.param.get_data(item['filename'],item['index'])
 
-            # Find convex hull of original data set
-            try:
-                vertices = self.compute_hull(R0)
-            except:
-                continue
+#             # Find convex hull of original data set
+#             try:
+#                 vertices = self.compute_hull(R0)
+#             except:
+#                 continue
 
-            # Transform coordinates
-            R, cp = self.transform_coord(R0)
-            ne0 = ne0
-            er0 = error
+#             # Transform coordinates
+#             R, cp = self.transform_coord(R0)
+#             ne0 = ne0
+#             er0 = error
 
 
 #             radar_mode = item['mode'].split('.')[0]
@@ -1757,31 +1778,34 @@ class Fit(EvalParam):
 
             # time.append(item['time'])
 #             time.append([item['starttime'],item['endtime']])
-            time.append(utime[index])
+#             time.append(utime[index])
             Coeffs.append(C)
             Covariance.append(dC)
             chi_sq.append(c2)
             cent_point.append(cp)
-            hull_v.append(vertices)
+#             hull_v.append(vertices)
             raw_coords.append(R0)
             raw_data.append(ne0)
             raw_error.append(error)
 #             raw_filename.append(item['filename'])
 #             raw_index.append(item['index'])
             raw_filename.append(FILENAME)
-            raw_index.append(index)
+#             raw_index.append(index)
 
-        self.time = time
+#         self.time = time
+        self.time = utime
         self.Coeffs = Coeffs
         self.Covariance = Covariance
         self.chi_sq = chi_sq
         self.cent_point = cent_point
-        self.hull_v = hull_v
+#         self.hull_v = hull_v
+        self.hull_v = verticies
         self.raw_coords = raw_coords
         self.raw_data = raw_data
         self.raw_error = raw_error
-        self.raw_filename = raw_filename
-        self.raw_index = raw_index
+#         self.raw_filename = raw_filename
+        self.raw_filename = FILENAME
+#         self.raw_index = raw_index
 
 
 
@@ -2182,7 +2206,7 @@ class AMISR_param(object):
         error = err.reshape(err.shape[0], -1)
 
         # This accounts for an error in some of the hdf5 files where chi2 is overestimated by 369.
-        if np.mean(chi2) > 100.:
+        if np.nanmedian(chi2) > 100.:
             chi2 = chi2 - 369.
 
         # data_check: 2D boolian array for removing "bad" data
@@ -2196,12 +2220,19 @@ class AMISR_param(object):
         else:
             data_check = np.array([np.isfinite(value)])
 
-        # ALL elements of data_check MUST be TRUE for a particular index to be kept
-        finite_indicies = np.where(np.all(data_check,axis=0))[0]
-
-        # reform the data arrays only with "good" data
-        value[~finite_indicies] = np.nan
-        error[~finite_indicies] = np.nan
+        # If ANY elements of data_check are FALSE, flag index as bad data
+        bad_data = np.squeeze(np.any(data_check==False,axis=0,keepdims=True))
+        value[bad_data] = np.nan
+        error[bad_data] = np.nan
+        
+        # remove the points where coordinate arrays are NaN
+        # these points usually correspond to altitude bins that were specified by the fitter but a particular beam does not reach
+        value = value[:,np.isfinite(altitude)]
+        error = error[:,np.isfinite(altitude)]
+        latitude = latitude[np.isfinite(altitude)]
+        longitude = longitude[np.isfinite(altitude)]
+        altitude = altitude[np.isfinite(altitude)]
+        
         
         # Convert input coordinates to geocentric-spherical
         r, t, p = cc.geodetic_to_spherical(latitude,longitude,altitude/1000.)
