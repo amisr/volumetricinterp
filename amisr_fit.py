@@ -87,15 +87,15 @@ class Model(object):
         - All methods EXCEPT for eval_model() can be called without specifying C or dC.
     """
 
-    def __init__(self,maxk,maxl,cap_lim=6.*np.pi/180.,C=None,dC=None):
+    def __init__(self,maxk,maxl,cap_lim=6.*np.pi/180.):
         self.maxk = maxk
         self.maxl = maxl
         self.nbasis = self.maxk*self.maxl**2
         self.cap_lim = cap_lim
-        if C is not None:
-            self.C = C
-        if dC is not None:
-            self.dC = dC
+#         if C is not None:
+#             self.C = C
+#         if dC is not None:
+#             self.dC = dC
 
     def basis_numbers(self,n):
         """
@@ -204,7 +204,7 @@ class Model(object):
         
 
 
-    def eval_model(self,R,calcgrad=True,calcerr=False,verbose=False):
+    def eval_model(self,R,C,calcgrad=False,calcerr=False,verbose=False):
         """
         Evaluate the density and gradients at the points in R given the coefficients C.
          If the covarience matrix, dC, is provided, the errors in the density and gradients will be calculated.  If not,
@@ -241,17 +241,20 @@ class Model(object):
             - A rough framework for error handling has been included in this code, but it has not been used often.
                 The method needs to be validated still and there are probably errors in the code.
         """
-        if self.C is None:
-            print 'WARNING: C not specified in Model!'
+
+#         if self.C is None:
+#             print 'WARNING: C not specified in Model!'
 
         out = {}
         A = self.eval_basis(R)
-        parameter = np.reshape(np.dot(A,self.C),np.shape(A)[0])
+#         parameter = np.reshape(np.dot(A,self.C),np.shape(A)[0])
+        parameter = np.reshape(np.dot(A,C),np.shape(A)[0])
         out['param'] = parameter
 
         if calcgrad:
             Ag = self.eval_grad_basis(R)
-            gradient = np.reshape(np.tensordot(Ag,self.C,axes=1),(np.shape(Ag)[0],np.shape(Ag)[1]))
+#             gradient = np.reshape(np.tensordot(Ag,self.C,axes=1),(np.shape(Ag)[0],np.shape(Ag)[1]))
+            gradient = np.reshape(np.tensordot(Ag,C,axes=1),(np.shape(Ag)[0],np.shape(Ag)[1]))
             out['grad'] = gradient
 
         if calcerr:
@@ -496,7 +499,8 @@ class EvalParam(Model):
 
 
 
-    def getparam(self,R0,calcgrad=True,calcerr=False):
+#     def getparam(self,R0,calcgrad=True,calcerr=False):
+    def getparam(self,time,R0,calcgrad=False,calcerr=False):
         """
         Fully calculates parameters and their gradients given input coordinates and a time.
         This is the main function that is used to retrieve reconstructed parameters.
@@ -524,19 +528,25 @@ class EvalParam(Model):
         """
 
 
+        Rshape = R0.shape
+        R0 = R0.reshape(Rshape[0], -1)
+
         check = self.check_hull(R0)
         R, __ = self.transform_coord(R0)
 
-        out = self.eval_model(R,calcgrad=calcgrad,calcerr=calcerr)
+        C = self.Coeffs[self.find_index(time)]
+
+        out = self.eval_model(R,C)
         parameter = out['param']
         parameter[~check] = np.nan
         P = parameter
-        dP = np.full((R0.shape[1],4),np.nan)
+
         if calcgrad:
             gradient = out['grad']
             gradient = self.inverse_transform(R,gradient)
             gradient[~check] = [np.nan,np.nan,np.nan]
             dP = np.array([gradient[:,0],gradient[:,1],gradient[:,2],np.zeros(len(parameter))]).T
+            return P, dP
 
         if calcerr:
             err = out['err']
@@ -545,8 +555,11 @@ class EvalParam(Model):
                 graderr = out['gerr']
                 graderr = self.inverse_transform(R,graderr,self.cp)
                 graderr[~check] = [np.nan,np.nan,np.nan]
+            return P, dP, err, graderr
+        
+        else:
+            return P.reshape(tuple(list(Rshape)[1:]))
 
-        return P, dP
     
     
     def transform_coord(self,R0):
@@ -650,9 +663,8 @@ class EvalParam(Model):
         vert = R_cart[chull.vertices]
 
         r, t, p = cc.cartesian_to_spherical(vert.T[0],vert.T[1],vert.T[2])
-        vertices = np.array([r,t,p]).T
+        self.hv = np.array([r,t,p]).T
 
-        self.hv = np.array(vertices).T
         return self.hv
 
 
@@ -686,7 +698,24 @@ class EvalParam(Model):
         return np.array(check)
 
 
+    def find_index(self, t):
+        """
+        Find the index of a file that is closest to the given time
 
+        Parameters:
+            t: [datetime object]
+                target time
+
+        Returns:
+            rec: [int]
+                index of the record that is closest to the target time
+        """
+
+        time0 = (t-dt.datetime.utcfromtimestamp(0)).total_seconds()
+        time_array = np.array([(float(ut[0])+float(ut[1]))/2. for ut in self.time])
+        rec = np.argmin(np.abs(time_array-time0))
+
+        return rec
 
 
 
@@ -1663,8 +1692,6 @@ class Fit(EvalParam):
 
 
 
-
-
     def validate(self,time0,altitude,longitude):
         """
         Creates a basic plot of the volumetric reconstruction next to the original measurment points to confirm that the reconstruction is reasonable.
@@ -1798,6 +1825,25 @@ class Fit(EvalParam):
         cbar.set_label(self.param.name+' ('+self.param.units+')')
 
         plt.show()
+
+
+    def maps(self):
+        
+        time = np.array([dt.datetime.utcfromtimestamp(t) for t in self.time[:,0]])
+
+        # define an input lat/lon grid
+        latrange = np.linspace(70.,80.,50)
+        lonrange = np.linspace(-100.,-80.,50)
+        latitude, longitude = np.meshgrid(latrange,lonrange)
+        altitude = np.full(latitude.shape, 300.)
+        
+        # Convert input coordinates to geocentric-spherical
+        r, t, p = cc.geodetic_to_spherical(latitude,longitude,altitude)
+        R0 = np.array([r,t,p])
+
+        for t in time:
+            ne = self.getparam(t,R0)
+#             print ne[np.isfinite(ne)]
 
 
 
@@ -2227,7 +2273,8 @@ def main():
     param = AMISR_param('dens')
     dayfit = Fit(param=param)
     dayfit.fit()
-    dayfit.saveh5()
+#     dayfit.saveh5()
+    dayfit.maps()
 
 #     targtime = dt.datetime(year,month,day,hour,minute)
 #     altitude = 300.
