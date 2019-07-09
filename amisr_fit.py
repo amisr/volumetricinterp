@@ -2200,45 +2200,45 @@ def find_index(filename,time):
 
 
 
-def generate_eventlist_standalone(date,radar):
-    """
-    Generates an eventlist for a single day that includes all events from that day, regardless of the radar mode that
-     was run.  This standalone version exists so event lists can be generated without nessisarially initializing the
-     Fit class.
+# def generate_eventlist_standalone(date,radar):
+#     """
+#     Generates an eventlist for a single day that includes all events from that day, regardless of the radar mode that
+#      was run.  This standalone version exists so event lists can be generated without nessisarially initializing the
+#      Fit class.
 
-    Returns:
-        eventlist: [dict]
-            list of dictionaries containing the timestamp, file name, radar mode, and index within the file for a 
-            particular event
-    """
+#     Returns:
+#         eventlist: [dict]
+#             list of dictionaries containing the timestamp, file name, radar mode, and index within the file for a 
+#             particular event
+#     """
 
-    eventlist = []
-    filedir = localpath+'/processed_data/'+radar+'/{:04d}/{:02d}'.format(date.year,date.month)
+#     eventlist = []
+#     filedir = localpath+'/processed_data/'+radar+'/{:04d}/{:02d}'.format(date.year,date.month)
 
-    num_sep = filedir.count(os.path.sep)
-    for root, dirs, files in os.walk(filedir):
-        num_sep_this = root.count(os.path.sep)
-        if (num_sep + 2 == num_sep_this) and ('.bad' not in root) and ('.noproc' not in root) and ('.old' not in root):
-            for file in files:
-                if file.endswith('.h5') and ('lp' in file):
-                    filename = os.path.join(root,file)
-                    print filename
-                    filepath = root.split('/')
-                    experiment = filepath[num_sep+1]
-                    mode = experiment.split('.')[0]
+#     num_sep = filedir.count(os.path.sep)
+#     for root, dirs, files in os.walk(filedir):
+#         num_sep_this = root.count(os.path.sep)
+#         if (num_sep + 2 == num_sep_this) and ('.bad' not in root) and ('.noproc' not in root) and ('.old' not in root):
+#             for file in files:
+#                 if file.endswith('.h5') and ('lp' in file):
+#                     filename = os.path.join(root,file)
+#                     print filename
+#                     filepath = root.split('/')
+#                     experiment = filepath[num_sep+1]
+#                     mode = experiment.split('.')[0]
 
-                    data = io_utils.read_partial_h5file(filename,['/Time'])
-                    utime = data['/Time']['UnixTime']
-                    for i,t in enumerate(utime):
-                        dh = (float(t[0])+float(t[1]))/2.
-                        tstmp = dt.datetime.utcfromtimestamp(dh)
-                        if tstmp >= date and tstmp < date+dt.timedelta(hours=24):
-                            eventlist.append({'time':tstmp,'filename':filename,'mode':mode,'index':i})
+#                     data = io_utils.read_partial_h5file(filename,['/Time'])
+#                     utime = data['/Time']['UnixTime']
+#                     for i,t in enumerate(utime):
+#                         dh = (float(t[0])+float(t[1]))/2.
+#                         tstmp = dt.datetime.utcfromtimestamp(dh)
+#                         if tstmp >= date and tstmp < date+dt.timedelta(hours=24):
+#                             eventlist.append({'time':tstmp,'filename':filename,'mode':mode,'index':i})
 
-    # Sort eventlist by timestamp
-    eventlist = sorted(eventlist, key=lambda event: event['time'])
+#     # Sort eventlist by timestamp
+#     eventlist = sorted(eventlist, key=lambda event: event['time'])
 
-    return eventlist
+#     return eventlist
 
 
 	
