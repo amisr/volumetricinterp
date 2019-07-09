@@ -1,9 +1,5 @@
 # amisr_fit.py
 
-
-import os 
-wdir = os.path.dirname(os.path.realpath(__file__))
-
 import numpy as np
 import scipy
 import scipy.integrate
@@ -11,7 +7,6 @@ import scipy.special as sp
 from scipy.spatial import ConvexHull
 import datetime as dt
 import coord_convert as cc
-import os
 import tables
 
 import matplotlib.pyplot as plt
@@ -45,6 +40,7 @@ PARAMETER_UNITS = 'm$^-3$'
 # date = dt.datetime(year,month,day)
 
 FILENAME = '/home/jovyan/mount/data/RISR-N/20171119.001_lp_1min-fitcal.h5'
+OUTFILENAME = 'test_out.h5'
 radar = 'RISR-N'
 code = 'lp'
 
@@ -1630,56 +1626,40 @@ class Fit(EvalParam):
 
 
 
-    def saveh5(self,filename=None):
+    def saveh5(self):
         """
         Saves coefficients to a hdf5 file
 
         Parameters:
-            filename: Optional [str]
-                name of file to save
-                default file is ./Coefficients/YYYMMDD_RADAR_PARAM.h5
+            None
         """
+        
+        with tables.open_file(OUTFILENAME, 'w') as h5out:
 
-        h5outname = wdir+'/Coefficients/{:04d}{:02d}{:02d}_{}_{}.h5'.format(self.date.year,self.date.month,self.date.day,self.radar,self.param.key)
-        if filename:
-            h5outname = filename
+            cgroup = h5out.create_group('/','Coeffs','Dataset')
+            fgroup = h5out.create_group('/','FitParams','Dataset')
+            dgroup = h5out.create_group('/','RawData','Dataset')
 
-        h5out = tables.open_file(h5outname, 'w')
+            h5out.create_array('/', 'UnixTime', self.time)
 
-        utime = [[(t[0]-dt.datetime.utcfromtimestamp(0)).total_seconds(),(t[1]-dt.datetime.utcfromtimestamp(0)).total_seconds()] for t in self.time]
+            h5out.create_array(cgroup, 'C', self.Coeffs)
+            h5out.create_array(cgroup, 'dC', self.Covariance)
 
-        cgroup = h5out.create_group('/','Coeffs','Dataset')
-        fgroup = h5out.create_group('/','FitParams','Dataset')
-        dgroup = h5out.create_group('/','RawData','Dataset')
+            h5out.create_array(fgroup, 'kmax', self.maxk)
+            h5out.create_array(fgroup, 'lmax', self.maxl)
+            h5out.create_array(fgroup, 'cap_lim', self.cap_lim)
+            h5out.create_array(fgroup, 'reglist', self.regularization_list)
+            h5out.create_array(fgroup, 'regmethod', self.reg_method)
+            h5out.create_array(fgroup, 'regscalefac', self.reg_scale_factor)
+            h5out.create_array(fgroup, 'chi2', self.chi_sq)
+            h5out.create_array(fgroup, 'center_point', self.cent_point)
+            h5out.create_array(fgroup, 'hull_verticies', self.hull_v)
 
-        h5out.create_array('/', 'UnixTime', utime)
+            h5out.create_array(dgroup, 'filename', self.raw_filename)
+            h5out.create_array(dgroup, 'coordinates', self.raw_coords)
+            h5out.create_array(dgroup, 'data', self.raw_data)
+            h5out.create_array(dgroup, 'error', self.raw_error)
 
-        h5out.create_array(cgroup, 'C', self.Coeffs)
-        h5out.create_array(cgroup, 'dC', self.Covariance)
-
-        h5out.create_array(fgroup, 'kmax', self.maxk)
-        h5out.create_array(fgroup, 'lmax', self.maxl)
-        h5out.create_array(fgroup, 'cap_lim', self.cap_lim)
-        h5out.create_array(fgroup, 'reglist', self.regularization_list)
-        h5out.create_array(fgroup, 'regmethod', self.reg_method)
-        h5out.create_array(fgroup, 'regscalefac', self.reg_scale_factor)
-        h5out.create_array(fgroup, 'chi2', self.chi_sq)
-        h5out.create_array(fgroup, 'center_point', self.cent_point)
-        vlarray = h5out.create_vlarray(fgroup, 'hull_vertices', tables.FloatAtom(shape=3))
-        for v in self.hull_v:
-            vlarray.append(v.T)
-
-        h5out.create_array(dgroup, 'filename', self.raw_filename)
-        h5out.create_array(dgroup, 'index', self.raw_index)
-        rarray = h5out.create_vlarray(dgroup, 'coordinates', tables.FloatAtom(shape=3))
-        darray = h5out.create_vlarray(dgroup, 'data', tables.FloatAtom(shape=1))
-        earray = h5out.create_vlarray(dgroup, 'error', tables.FloatAtom(shape=1))
-        for r,d,e in zip(self.raw_coords,self.raw_data,self.raw_error):
-            rarray.append(r.T)
-            darray.append(d[:,None])
-            earray.append(e[:,None])
-
-        h5out.close()
 
 
 
@@ -2246,14 +2226,13 @@ def main():
 
     param = AMISR_param('dens')
     dayfit = Fit(param=param)
-#     eventlist = dayfit.generate_eventlist()
     dayfit.fit()
-    # dayfit.saveh5(filename='test_out.h5')
+    dayfit.saveh5()
 
-    targtime = dt.datetime(year,month,day,hour,minute)
-    altitude = 300.
-    longitude = -90.
-    dayfit.validate(targtime,altitude,longitude)
+#     targtime = dt.datetime(year,month,day,hour,minute)
+#     altitude = 300.
+#     longitude = -90.
+#     dayfit.validate(targtime,altitude,longitude)
 
 	
 	
