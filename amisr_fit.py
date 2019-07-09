@@ -2,9 +2,7 @@
 
 
 import os 
-localpath = '/Volumes/AMISR_PROCESSED'
 wdir = os.path.dirname(os.path.realpath(__file__))
-dbname = 'RawData_Folders_Exps_Times_by_Radar.h5'
 
 import numpy as np
 import scipy
@@ -13,7 +11,6 @@ import scipy.special as sp
 from scipy.spatial import ConvexHull
 import datetime as dt
 import coord_convert as cc
-import processed_file_list as pfl
 import os
 import tables
 
@@ -762,78 +759,8 @@ class Fit(EvalParam):
 
     # def __init__(self,date=None,radar=None,code=None,param=None):
     def __init__(self,param=None):
-#         self.date = date
         self.radar = radar
-#         self.code = code
         self.param = param
-
-
-    def generate_eventlist(self,starttime=None,endtime=None):
-        """
-        Generates an eventlist for a single day that includes all events from that day, regardless of the radar mode that
-         was run.
-
-        Returns:
-            eventlist: [dict]
-                list of dictionaries containing the timestamp, file name, radar mode, and index within the file for a 
-                particular event
-                vaild keys:
-                    'time': timestamp (datetime object)
-                    'filename': file name including full file path
-                    'mode': radar mode
-                    'index': index of this particular event within the file
-        """
-        if starttime is None:
-            starttime = self.date
-            endtime = self.date+dt.timedelta(hours=24)
-        elif endtime is None:
-            endtime = starttime+dt.timedelta(hours=1)
-  
-
-        filelist = pfl.file_list(self.date,radars=[self.radar],criteria=['lp','1min','fitcal'])
-
-        eventlist = []
-        for filename in filelist:
-            experiment = os.path.basename(filename)
-            with tables.open_file(dbname,'r') as h5file:
-                tn = h5file.get_node('/Radars/{}'.format(self.radar.replace('-','')))
-                en = h5file.get_node('/ExpNames/Names')
-                ny = tn[:]['nyear']
-                nm = tn[:]['nmonth']
-                nd = tn[:]['nday']
-                ns = tn[:]['nset']
-
-                # for experiment in self.experiment_list:
-                year = int(experiment[0:4])
-                month = int(experiment[4:6])
-                day = int(experiment[6:8])
-                num = int(experiment[9:12])
-                index = np.where((ny==year) & (nm==month) & (nd==day) & (ns==num))[0]
-                if index.size == 0:
-                    experiment['mode'] = '0000'
-                else:
-                    i = index[0]
-                    eid = tn[i]['nExpId']
-                    mode = en[eid][0]
-                    print mode
-
-
-
-            with tables.open_file(filename, 'r') as h5file:
-                utime = h5file.get_node('/Time/UnixTime')
-                utime = utime.read()
-            for i,t in enumerate(utime):
-                dh = (float(t[0])+float(t[1]))/2.
-                tstmp = dt.datetime.utcfromtimestamp(dh)
-                ststmp = dt.datetime.utcfromtimestamp(float(t[0]))
-                etstmp = dt.datetime.utcfromtimestamp(float(t[1]))
-                if tstmp >= starttime and tstmp < endtime:
-                    eventlist.append({'time':tstmp,'starttime':ststmp,'endtime':etstmp,'filename':filename,'mode':mode,'index':i})
-
-        # Sort eventlist by timestamp
-        eventlist = sorted(eventlist, key=lambda event: event['time'])
-
-        return eventlist
 
 
     def get_ns(self,q):
@@ -859,9 +786,6 @@ class Fit(EvalParam):
             q = q - (self.nbasis-ni)
         nj = q
         return ni, nj
-
-
-
 
 
 
