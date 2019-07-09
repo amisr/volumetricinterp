@@ -1609,43 +1609,16 @@ class Fit(EvalParam):
 
     def fit(self):
         """
-        Perform fit on every event in eventlist.
+        Perform fit on every record in file.
 
         Parameters:
-            eventlist: [dict]
-                list of dictionaries containing the timestamp, file name, radar mode, and index within the file for a 
-                particular event
-                vaild keys:
-                    'time': timestamp (datetime object)
-                    'filename': file name including full file path
-                    'mode': radar mode
-                    'index': index of this particular event within the file
-                eventlist can be created by the generate_eventlist() method of the Fit class
+            None
         """
 
-#         if not eventlist:
-#             raise ValueError('Event list is empty!')
 
-
-        time = []
         Coeffs = []
         Covariance = []
         chi_sq = []
-        cent_point = []
-        hull_v = []
-        raw_coords = []
-        raw_data = []
-        raw_error = []
-        raw_filename = []
-        raw_index = []
-
-#         evaluated_modes = {}
-
-#         mode_dict = {'WorldDay66m':{'maxk':4,'maxl':6,'cap_lim':6.*np.pi/180.,'reglist':['curvature','0thorder'],'regmethod':'chi2','regscalefac':1.0},
-#                      'imaginglp':{'maxk':4,'maxl':6,'cap_lim':6.*np.pi/180.,'reglist':['0thorder'],'regmethod':'chi2','regscalefac':np.nan},
-#                      'Convection67m':{'maxk':4,'maxl':6,'cap_lim':6.*np.pi/180.,'reglist':['0thorder'],'regmethod':'chi2','regscalefac':np.nan},
-#                      'isinglass':{'maxk':4,'maxl':6,'cap_lim':6.*np.pi/180.,'reglist':['0thorder'],'regmethod':'chi2','regscalefac':np.nan}
-#                     }
 
         
         self.maxl = LMAX
@@ -1657,155 +1630,79 @@ class Fit(EvalParam):
         self.reg_scale_factor = np.nan
 
 
-#         if radar_mode in evaluated_modes:
-#             reg_matrices = evaluated_modes[radar_mode]
-#             if '0thorder' in self.regularization_list:
-#                 reg_matrices['Tau'] = self.eval_tau(R,ne0,er0)
-#         else:
-#             print 'New mode {}.  Regularization matrices must be evaluated.  This may take a few minutes.'.format(radar_mode)
-
         print 'Evaluating Regularization matricies.  This may take a few minutes.'
         reg_matrices = {}
         if 'curvature' in self.regularization_list:
             reg_matrices['Omega'] = self.eval_omega()
         if '0thorder' in self.regularization_list:
             reg_matrices['Psi'] = self.eval_psi()
-#             reg_matrices['Tau'] = self.eval_tau(R,ne0,er0)
-#         evaluated_modes[radar_mode] = reg_matrices
  
-        
-        
-#         # find total number of indicies in the file
-#         # file looping/IO is hacky - need to rewrite param.get_data
-#         with tables.open_file(FILENAME,'r') as h5file:
-#             utime = h5file.get_node('/Time/UnixTime')[:]
-            
-            
+        # read data from AMISR fitted file
         utime, R0, value, error = self.param.get_data(FILENAME)
  
-        print utime.shape, R0.shape, value.shape, error.shape
-
         # Find convex hull of original data set
         verticies = self.compute_hull(R0)
-#             try:
-#                 vertices = self.compute_hull(R0)
-#             except:
-#                 continue
 
         # Transform coordinates
         R0, cp = self.transform_coord(R0)
-#         ne0 = ne0
-#         er0 = error
-    
-#         for index in range(len(utime)):
-        for ne0, er0 in zip(value,error):
-            print ne0
-            print R0.shape, ne0.shape, er0.shape
+
+        # loop over every record and calculate the coefficients
+        for ne0, er0 in zip(value[:5,:],error[:5,:]):
             
             R = R0[:,np.isfinite(ne0)]
             er0 = er0[np.isfinite(ne0)]
             ne0 = ne0[np.isfinite(ne0)]
 
-            print R.shape, ne0.shape, er0.shape
-
-#         for item in eventlist:
-
-#             print item['time']
-#             print item['mode']
-
-#             R0, ne0, error = self.param.get_data(FILENAME,index)
-#             R0, ne0, error = self.param.get_data(item['filename'],item['index'])
-
-#             # Find convex hull of original data set
-#             try:
-#                 vertices = self.compute_hull(R0)
-#             except:
-#                 continue
-
-#             # Transform coordinates
-#             R, cp = self.transform_coord(R0)
-#             ne0 = ne0
-#             er0 = error
-
-
-#             radar_mode = item['mode'].split('.')[0]
-
-#             self.maxl = LMAX
-#             self.maxk = KMAX
-#             self.cap_lim = CAPLIMIT
-#             self.nbasis = self.maxk*self.maxl**2
-#             self.regularization_list = REGULARIZATION_METHOD
-#             self.reg_method = REGULARIZATION_PARAMETER_METHOD
-#             self.reg_scale_factor = np.nan
-
-
-#             if radar_mode in evaluated_modes:
-#                 reg_matrices = evaluated_modes[radar_mode]
-#                 if '0thorder' in self.regularization_list:
-#                     reg_matrices['Tau'] = self.eval_tau(R,ne0,er0)
-#             else:
-#                 print 'New mode {}.  Regularization matrices must be evaluated.  This may take a few minutes.'.format(radar_mode)
-
-#                 reg_matrices = {}
-#                 if 'curvature' in self.regularization_list:
-#                     reg_matrices['Omega'] = self.eval_omega()
-#                 if '0thorder' in self.regularization_list:
-#                     reg_matrices['Psi'] = self.eval_psi()
-#                     reg_matrices['Tau'] = self.eval_tau(R,ne0,er0)
-#                 evaluated_modes[radar_mode] = reg_matrices
-
+            # Evaluate Tau regularization matrix - this is based on data and must be in loop
             if '0thorder' in self.regularization_list:
                 reg_matrices['Tau'] = self.eval_tau(R,ne0,er0)
 
 
+            # if regularization matricies are NaN, skip this record - fit can not be computed
             if np.any([np.any(np.isnan(v.flatten())) for k, v in reg_matrices.items()]):
+                # NaNs in C, dC, c2
+                Coeffs.append(np.full(self.nbasis, np.nan))
+                Covariance.append(np.full((self.nbasis,self.nbasis), np.nan))
+                chi_sq.append(np.nan)                
                 continue
 
-
+            # define matricies
             W = np.array(er0**(-2))[:,None]
             b = ne0[:,None]
             A = self.eval_basis(R)
 
+            # calculate regularization parameters
             reg_params = self.find_reg_param(A,b,W,reg_matrices,method=self.reg_method)
 
-
+            # if regularization parameters are NaN, skip this record - fit can not be computed
             if np.any(np.isnan([v for k, v in reg_params.items()])):
+                # NaNs in C, dC, c2
+                Coeffs.append(np.full(self.nbasis, np.nan))
+                Covariance.append(np.full((self.nbasis,self.nbasis), np.nan))
+                chi_sq.append(np.nan)                
                 continue
 
-
+            # calculate coefficients and covarience matrix
             C, dC = self.eval_C(A,b,W,reg_matrices,reg_params,calccov=True)
-            c2 = sum((np.squeeze(np.dot(A,C))-np.squeeze(b))**2*np.squeeze(W))
 
-            # time.append(item['time'])
-#             time.append([item['starttime'],item['endtime']])
-#             time.append(utime[index])
+            # calculate chi2
+            c2 = sum((np.squeeze(np.dot(A,C))-np.squeeze(b))**2*np.squeeze(W))
+            
+            # append lists
             Coeffs.append(C)
             Covariance.append(dC)
             chi_sq.append(c2)
-            cent_point.append(cp)
-#             hull_v.append(vertices)
-            raw_coords.append(R0)
-            raw_data.append(ne0)
-            raw_error.append(error)
-#             raw_filename.append(item['filename'])
-#             raw_index.append(item['index'])
-            raw_filename.append(FILENAME)
-#             raw_index.append(index)
 
-#         self.time = time
         self.time = utime
-        self.Coeffs = Coeffs
-        self.Covariance = Covariance
-        self.chi_sq = chi_sq
-        self.cent_point = cent_point
-#         self.hull_v = hull_v
+        self.Coeffs = np.array(Coeffs)
+        self.Covariance = np.array(Covariance)
+        self.chi_sq = np.array(chi_sq)
+        self.cent_point = cp
         self.hull_v = verticies
-        self.raw_coords = raw_coords
-        self.raw_data = raw_data
-        self.raw_error = raw_error
-#         self.raw_filename = raw_filename
+        self.raw_coords = R0
+        self.raw_data = value
+        self.raw_error = error
         self.raw_filename = FILENAME
-#         self.raw_index = raw_index
 
 
 
