@@ -371,11 +371,14 @@ class EvalParam(Model):
         compute_hull: computes the convex hull that defines where model is valid
         check_hull: checks if the input coordinates are within the convex hull
     """
-    def __init__(self,datetime=None,radar=None,code=None,param=None,timetol=60.,timeinterp=False):
-        self.datetime = datetime
-        self.radar = radar
-        self.code = code
-        self.param = param
+#     def __init__(self,datetime=None,radar=None,code=None,param=None,timetol=60.,timeinterp=False):
+    def __init__(self,coeff_filename,timetol=60.,timeinterp=False):
+        # load coefficient file
+
+#         self.datetime = datetime
+#         self.radar = radar
+#         self.code = code
+#         self.param = param
         self.timetol = timetol
         self.timeinterp = timeinterp
 
@@ -391,112 +394,29 @@ class EvalParam(Model):
         Loads coefficients from a saved hdf5 file based on the date, radar, and param attributes
 
         Parameters:
-            filename: Optional [str]
+            filename: [str]
                 file to load
-                default file is ./Coefficients/YYYMMDD_RADAR_PARAM.h5
             raw: Optional [bool]
                 flag to indicate if the raw data should be loaded or not
                 default is False (raw data will NOT be loaded)
-        Notes:
-            - This saves coefficients and other parameters nessisary for the model as atributes of the class.
         """
-        if filename is not None:
-            cfilename = filename
-        else:
-            cfilename = wdir+'/Coefficients/{:04d}{:02d}{:02d}_{}_{}.h5'.format(self.datetime.year,self.datetime.month,self.datetime.day,self.radar,self.param.key)
 
-        # print cfilename
+        with tables.open_file(filename, 'r') as h5file:
+            self.Coeffs = h5file.get_node('/Coeffs/C')[:]
+            self.Covariance = h5file.get_node('/Coeffs/dC')[:]
+            
+            self.time = h5file.get_node('/UnixTime')[:]
 
-        # hdir = '/UT'+str(self.datetime.hour).zfill(2)
-        # if raw:
-        #     data = io_utils.read_partial_h5file(cfilename,[hdir,hdir+'/Coeffs',hdir+'/FitParams',hdir+'/RawData'])
-        # else:
-        #     data = io_utils.read_partial_h5file(cfilename,[hdir,hdir+'/Coeffs',hdir+'/FitParams'])
-        # utime = data[hdir]['UnixTime']
-        # Coeffs = data[hdir+'/Coeffs']['C']
-        # Covariance = data[hdir+'/Coeffs']['dC']
-        # chi2 = data[hdir+'/FitParams']['chi2']
-        # maxk = data[hdir+'/FitParams']['kmax']
-        # maxl = data[hdir+'/FitParams']['lmax']
-        # cap_lim = data[hdir+'/FitParams']['cap_lim']
-        # cent_point = data[hdir+'/FitParams']['center_point']
-        # hull_v = data[hdir+'/FitParams']['hull_vertices']
-        # if raw:
-        #     raw_coords = data[hdir+'/RawData']['coordinates']
-        #     raw_data = data[hdir+'/RawData']['data']
-        #     raw_error = data[hdir+'/RawData']['error']
+            self.maxk = h5file.get_node('/FitParams/kmax').read()
+            self.maxl = h5file.get_node('/FitParams/lmax').read()
+            self.cap_lim = h5file.get_node('/FitParams/cap_lim').read()
+            self.cent_point = h5file.get_node('/FitParams/center_point')[:]
+            self.hull_v = h5file.get_node('/FitParams/hull_verticies')[:]
 
-
-        targtime = (self.datetime-dt.datetime(1970,1,1)).total_seconds()
-
-        with tables.open_file(cfilename, 'r') as h5file:
-            utime = h5file.get_node('/UnixTime')
-            Coeffs = h5file.get_node('/Coeffs/C')
-            Covariance = h5file.get_node('/Coeffs/dC')
-            # chi2 = h5file.get_node(hdir+'/FitParams/chi2')
-            maxk = h5file.get_node('/FitParams/kmax')
-            maxl = h5file.get_node('/FitParams/lmax')
-            cap_lim = h5file.get_node('/FitParams/cap_lim')
-            cent_point = h5file.get_node('/FitParams/center_point')
-            hull_v = h5file.get_node('/FitParams/hull_vertices')
-            if raw:
-                raw_coords = h5file.get_node('/RawData/coordinates')
-                raw_data = h5file.get_node('/RawData/data')
-                raw_error = h5file.get_node('/RawData/error')
-                raw_filename = h5file.get_node('/RawData/filename')
-
-            utime = utime.read()
-
-            if self.timeinterp:
-                midtime = np.array([(t[0]+t[1])/2. for t in utime])
-                time = [dt.datetime.utcfromtimestamp(t) for t in midtime]
-                rec = np.where((targtime>=midtime[:-1]) & (targtime<midtime[1:]))[0]
-                if rec.size == 0:
-                    raise ValueError('Requested time not included in {}'.format(cfilename))
-                rec0 = rec[0]
-                rec1 = rec[0] + 1
-            else:
-                utime = np.array(utime)
-                time = [dt.datetime.utcfromtimestamp(t[0]) for t in utime]
-                rec = np.where((targtime >= utime[:,0]) & (targtime < utime[:,1]))[0]
-                if rec.size == 0:
-                    raise ValueError('Requested time not included in {}'.format(cfilename))
-                rec0 = rec[0]
-
-            # print rec0, rec1
-
-            if raw:
-                self.rR = raw_coords[rec0]
-                self.rd = raw_data[rec0]
-                self.re = raw_error[rec0]
-                self.rfn = raw_filename[rec0]
-
-
-            self.maxk = maxk.read()
-            self.maxl = maxl.read()
-            self.nbasis = self.maxk*self.maxl**2
-            self.cap_lim = cap_lim.read()
-
-            self.t = time[rec0]
-            self.C = np.array(Coeffs[rec0])
-            self.dC = np.array(Covariance[rec0])
-            self.cp = cent_point[rec0]
-            self.hv = hull_v[rec0]
-
-            if self.timeinterp:
-                time0 = (time[rec0]-dt.datetime(1970,1,1)).total_seconds()
-                time1 = (time[rec1]-dt.datetime(1970,1,1)).total_seconds()
-
-                C0 = np.array(Coeffs[rec0])
-                C1 = np.array(Coeffs[rec1])
-                dC0 = np.array(Covariance[rec0])
-                dC1 = np.array(Covariance[rec1])
-
-                self.C = (targtime-time0)/(time1-time0)*(C1-C0) + C0
-                self.dC = (targtime-time0)/(time1-time0)*(dC1-dC0) + dC0
-
-
-
+        self.nbasis = self.maxk*self.maxl**2
+                
+                
+                
 
 
 #     def getparam(self,R0,calcgrad=True,calcerr=False):
@@ -679,9 +599,9 @@ class EvalParam(Model):
                 if input points are expressed as a list of r,t,p points, eg. points = [[r1,t1,p1],[r2,t2,p2],...], R = np.array(points).T
 
         """
-        x, y, z = cc.spherical_to_cartesian(self.hv.T[0],self.hv.T[1],self.hv.T[2])
+        x, y, z = cc.spherical_to_cartesian(self.hull_v[0],self.hull_v[1],self.hull_v[2])
         vert_cart = np.array([x,y,z]).T
-
+        
         hull = ConvexHull(vert_cart)
         check = []
         for R in R0.T:
@@ -1596,7 +1516,7 @@ class Fit(EvalParam):
         R0, cp = self.transform_coord(R0)
 
         # loop over every record and calculate the coefficients
-        for ne0, er0 in zip(value[:5,:],error[:5,:]):
+        for ne0, er0 in zip(value[:10,:],error[:10,:]):
             
             R = R0[:,np.isfinite(ne0)]
             er0 = er0[np.isfinite(ne0)]
@@ -1843,7 +1763,7 @@ class Fit(EvalParam):
 
         for t in time:
             ne = self.getparam(t,R0)
-#             print ne[np.isfinite(ne)]
+            print ne[np.isfinite(ne)]
 
 
 
@@ -2272,8 +2192,9 @@ def main():
 
     param = AMISR_param('dens')
     dayfit = Fit(param=param)
-    dayfit.fit()
+#     dayfit.fit()
 #     dayfit.saveh5()
+    dayfit.loadh5(filename='test_out.h5')
     dayfit.maps()
 
 #     targtime = dt.datetime(year,month,day,hour,minute)
