@@ -454,7 +454,8 @@ class EvalParam(Model):
         check = self.check_hull(R0)
         R, __ = self.transform_coord(R0)
 
-        C = self.Coeffs[self.find_index(time)]
+#         C = self.Coeffs[self.find_index(time)]
+        C, dC = self.get_C(time)
 
         out = self.eval_model(R,C)
         parameter = out['param']
@@ -617,7 +618,49 @@ class EvalParam(Model):
             check.append(value)
         return np.array(check)
 
+    def get_C(self, t):
+        """
+        Return values for C and dC based on a given time and whether or not time intepolation has been selected
+        
+        Parameters:
+            t: [datetime object]
+                target time
 
+        Returns:
+            C: [ndarray(nbasis)]
+                coefficient array
+            dC: [ndarray(nbasisxnbasis)]
+                covariance matrix
+        """
+            
+        # find unix time of requested point
+        t0 = (t-dt.datetime.utcfromtimestamp(0)).total_seconds()
+
+        # find time of mid-points
+        mt = np.array([(float(ut[0])+float(ut[1]))/2. for ut in self.time[:5]])
+        
+        if t0<np.min(mt) or t0>np.max(mt):
+            print 'Time out of range!'
+            C = np.full(self.nbasis,np.nan)
+            dC = np.full((self.nbasis,self.nbasis),np.nan)
+
+        else:
+            if self.timeinterp:            
+                # find index of neighboring points
+                i = np.argwhere((t0>=mt[:-1]) & (t0<mt[1:])).flatten()[0]
+                # calculate T
+                T = (t0-mt[i])/(mt[i+1]-mt[i])
+                # calculate interpolated values
+                C = (1-T)*self.Coeffs[i,:] + T*self.Coeffs[i+1,:]
+                dC = (1-T)*self.Covariance[i,:,:] + T*self.Covariance[i+1,:,:]
+
+            else:
+                i = np.argmin(np.abs(mt-t0))
+                C = self.Coeffs[i]
+                dC = self.Covariance[i]
+
+        return C, dC
+    
     def find_index(self, t):
         """
         Find the index of a file that is closest to the given time
@@ -1749,7 +1792,8 @@ class Fit(EvalParam):
 
     def maps(self):
         
-        time = np.array([dt.datetime.utcfromtimestamp(t) for t in self.time[:,0]])
+        self.timeinterp = False
+        time = np.array([dt.datetime.utcfromtimestamp(t) for t in self.time[:,1]])
 
         # define an input lat/lon grid
         latrange = np.linspace(70.,80.,50)
