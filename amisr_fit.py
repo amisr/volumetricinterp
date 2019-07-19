@@ -1,11 +1,5 @@
 # amisr_fit.py
 
-
-import os 
-localpath = '/Volumes/AMISR_PROCESSED'
-wdir = os.path.dirname(os.path.realpath(__file__))
-dbname = 'RawData_Folders_Exps_Times_by_Radar.h5'
-
 import numpy as np
 import scipy
 import scipy.integrate
@@ -13,8 +7,6 @@ import scipy.special as sp
 from scipy.spatial import ConvexHull
 import datetime as dt
 import coord_convert as cc
-import processed_file_list as pfl
-import os
 import tables
 
 import matplotlib.pyplot as plt
@@ -39,14 +31,16 @@ MAX_Z_INT = np.inf
 PARAMETER_RANGE = [0, 3e11]
 PARAMETER_UNITS = 'm$^-3$'
 
-year = 2016
-month = 12
-day = 27
-hour = 22
-minute = 0
+# year = 2016
+# month = 12
+# day = 27
+# hour = 22
+# minute = 0
 
-date = dt.datetime(year,month,day)
+# date = dt.datetime(year,month,day)
 
+FILENAME = '/home/jovyan/mount/data/RISR-N/20171119.001_lp_1min-fitcal.h5'
+OUTFILENAME = 'test_out.h5'
 radar = 'RISR-N'
 code = 'lp'
 
@@ -93,15 +87,15 @@ class Model(object):
         - All methods EXCEPT for eval_model() can be called without specifying C or dC.
     """
 
-    def __init__(self,maxk,maxl,cap_lim=6.*np.pi/180.,C=None,dC=None):
+    def __init__(self,maxk,maxl,cap_lim=6.*np.pi/180.):
         self.maxk = maxk
         self.maxl = maxl
         self.nbasis = self.maxk*self.maxl**2
         self.cap_lim = cap_lim
-        if C is not None:
-            self.C = C
-        if dC is not None:
-            self.dC = dC
+#         if C is not None:
+#             self.C = C
+#         if dC is not None:
+#             self.dC = dC
 
     def basis_numbers(self,n):
         """
@@ -210,7 +204,7 @@ class Model(object):
         
 
 
-    def eval_model(self,R,calcgrad=True,calcerr=False,verbose=False):
+    def eval_model(self,R,C,calcgrad=False,calcerr=False,verbose=False):
         """
         Evaluate the density and gradients at the points in R given the coefficients C.
          If the covarience matrix, dC, is provided, the errors in the density and gradients will be calculated.  If not,
@@ -247,17 +241,20 @@ class Model(object):
             - A rough framework for error handling has been included in this code, but it has not been used often.
                 The method needs to be validated still and there are probably errors in the code.
         """
-        if self.C is None:
-            print 'WARNING: C not specified in Model!'
+
+#         if self.C is None:
+#             print 'WARNING: C not specified in Model!'
 
         out = {}
         A = self.eval_basis(R)
-        parameter = np.reshape(np.dot(A,self.C),np.shape(A)[0])
+#         parameter = np.reshape(np.dot(A,self.C),np.shape(A)[0])
+        parameter = np.reshape(np.dot(A,C),np.shape(A)[0])
         out['param'] = parameter
 
         if calcgrad:
             Ag = self.eval_grad_basis(R)
-            gradient = np.reshape(np.tensordot(Ag,self.C,axes=1),(np.shape(Ag)[0],np.shape(Ag)[1]))
+#             gradient = np.reshape(np.tensordot(Ag,self.C,axes=1),(np.shape(Ag)[0],np.shape(Ag)[1]))
+            gradient = np.reshape(np.tensordot(Ag,C,axes=1),(np.shape(Ag)[0],np.shape(Ag)[1]))
             out['grad'] = gradient
 
         if calcerr:
@@ -374,18 +371,22 @@ class EvalParam(Model):
         compute_hull: computes the convex hull that defines where model is valid
         check_hull: checks if the input coordinates are within the convex hull
     """
-    def __init__(self,datetime=None,radar=None,code=None,param=None,timetol=60.,timeinterp=False):
-        self.datetime = datetime
-        self.radar = radar
-        self.code = code
-        self.param = param
+#     def __init__(self,datetime=None,radar=None,code=None,param=None,timetol=60.,timeinterp=False):
+    def __init__(self,coeff_filename,timetol=60.,timeinterp=False):
+        # load coefficient file
+
+#         self.datetime = datetime
+#         self.radar = radar
+#         self.code = code
+#         self.param = param
         self.timetol = timetol
         self.timeinterp = timeinterp
 
-        try:
-            self.loadh5()
-        except Exception as e:
-            print e
+        self.loadh5(filename=coeff_filename)
+#         try:
+#             self.loadh5()
+#         except Exception as e:
+#             print e
             # print 'WARNING: {:04d}{:02d}{:02d}_{}_{}.h5 does not exist! A valid coefficient file must be loaded.'.format(self.datetime.year,self.datetime.month,self.datetime.day,self.radar,self.param.key)
 
 
@@ -394,115 +395,33 @@ class EvalParam(Model):
         Loads coefficients from a saved hdf5 file based on the date, radar, and param attributes
 
         Parameters:
-            filename: Optional [str]
+            filename: [str]
                 file to load
-                default file is ./Coefficients/YYYMMDD_RADAR_PARAM.h5
             raw: Optional [bool]
                 flag to indicate if the raw data should be loaded or not
                 default is False (raw data will NOT be loaded)
-        Notes:
-            - This saves coefficients and other parameters nessisary for the model as atributes of the class.
         """
-        if filename is not None:
-            cfilename = filename
-        else:
-            cfilename = wdir+'/Coefficients/{:04d}{:02d}{:02d}_{}_{}.h5'.format(self.datetime.year,self.datetime.month,self.datetime.day,self.radar,self.param.key)
 
-        # print cfilename
+        with tables.open_file(filename, 'r') as h5file:
+            self.Coeffs = h5file.get_node('/Coeffs/C')[:]
+            self.Covariance = h5file.get_node('/Coeffs/dC')[:]
+            
+            self.time = h5file.get_node('/UnixTime')[:]
 
-        # hdir = '/UT'+str(self.datetime.hour).zfill(2)
-        # if raw:
-        #     data = io_utils.read_partial_h5file(cfilename,[hdir,hdir+'/Coeffs',hdir+'/FitParams',hdir+'/RawData'])
-        # else:
-        #     data = io_utils.read_partial_h5file(cfilename,[hdir,hdir+'/Coeffs',hdir+'/FitParams'])
-        # utime = data[hdir]['UnixTime']
-        # Coeffs = data[hdir+'/Coeffs']['C']
-        # Covariance = data[hdir+'/Coeffs']['dC']
-        # chi2 = data[hdir+'/FitParams']['chi2']
-        # maxk = data[hdir+'/FitParams']['kmax']
-        # maxl = data[hdir+'/FitParams']['lmax']
-        # cap_lim = data[hdir+'/FitParams']['cap_lim']
-        # cent_point = data[hdir+'/FitParams']['center_point']
-        # hull_v = data[hdir+'/FitParams']['hull_vertices']
-        # if raw:
-        #     raw_coords = data[hdir+'/RawData']['coordinates']
-        #     raw_data = data[hdir+'/RawData']['data']
-        #     raw_error = data[hdir+'/RawData']['error']
+            self.maxk = h5file.get_node('/FitParams/kmax').read()
+            self.maxl = h5file.get_node('/FitParams/lmax').read()
+            self.cap_lim = h5file.get_node('/FitParams/cap_lim').read()
+            self.cent_point = h5file.get_node('/FitParams/center_point')[:]
+            self.hull_v = h5file.get_node('/FitParams/hull_verticies')[:]
+
+        self.nbasis = self.maxk*self.maxl**2
+                
+                
+                
 
 
-        targtime = (self.datetime-dt.datetime(1970,1,1)).total_seconds()
-
-        with tables.open_file(cfilename, 'r') as h5file:
-            utime = h5file.get_node('/UnixTime')
-            Coeffs = h5file.get_node('/Coeffs/C')
-            Covariance = h5file.get_node('/Coeffs/dC')
-            # chi2 = h5file.get_node(hdir+'/FitParams/chi2')
-            maxk = h5file.get_node('/FitParams/kmax')
-            maxl = h5file.get_node('/FitParams/lmax')
-            cap_lim = h5file.get_node('/FitParams/cap_lim')
-            cent_point = h5file.get_node('/FitParams/center_point')
-            hull_v = h5file.get_node('/FitParams/hull_vertices')
-            if raw:
-                raw_coords = h5file.get_node('/RawData/coordinates')
-                raw_data = h5file.get_node('/RawData/data')
-                raw_error = h5file.get_node('/RawData/error')
-                raw_filename = h5file.get_node('/RawData/filename')
-
-            utime = utime.read()
-
-            if self.timeinterp:
-                midtime = np.array([(t[0]+t[1])/2. for t in utime])
-                time = [dt.datetime.utcfromtimestamp(t) for t in midtime]
-                rec = np.where((targtime>=midtime[:-1]) & (targtime<midtime[1:]))[0]
-                if rec.size == 0:
-                    raise ValueError('Requested time not included in {}'.format(cfilename))
-                rec0 = rec[0]
-                rec1 = rec[0] + 1
-            else:
-                utime = np.array(utime)
-                time = [dt.datetime.utcfromtimestamp(t[0]) for t in utime]
-                rec = np.where((targtime >= utime[:,0]) & (targtime < utime[:,1]))[0]
-                if rec.size == 0:
-                    raise ValueError('Requested time not included in {}'.format(cfilename))
-                rec0 = rec[0]
-
-            # print rec0, rec1
-
-            if raw:
-                self.rR = raw_coords[rec0]
-                self.rd = raw_data[rec0]
-                self.re = raw_error[rec0]
-                self.rfn = raw_filename[rec0]
-
-
-            self.maxk = maxk.read()
-            self.maxl = maxl.read()
-            self.nbasis = self.maxk*self.maxl**2
-            self.cap_lim = cap_lim.read()
-
-            self.t = time[rec0]
-            self.C = np.array(Coeffs[rec0])
-            self.dC = np.array(Covariance[rec0])
-            self.cp = cent_point[rec0]
-            self.hv = hull_v[rec0]
-
-            if self.timeinterp:
-                time0 = (time[rec0]-dt.datetime(1970,1,1)).total_seconds()
-                time1 = (time[rec1]-dt.datetime(1970,1,1)).total_seconds()
-
-                C0 = np.array(Coeffs[rec0])
-                C1 = np.array(Coeffs[rec1])
-                dC0 = np.array(Covariance[rec0])
-                dC1 = np.array(Covariance[rec1])
-
-                self.C = (targtime-time0)/(time1-time0)*(C1-C0) + C0
-                self.dC = (targtime-time0)/(time1-time0)*(dC1-dC0) + dC0
-
-
-
-
-
-    def getparam(self,R0,calcgrad=True,calcerr=False):
+#     def getparam(self,R0,calcgrad=True,calcerr=False):
+    def getparam(self,time,R0,calcgrad=False,calcerr=False):
         """
         Fully calculates parameters and their gradients given input coordinates and a time.
         This is the main function that is used to retrieve reconstructed parameters.
@@ -530,19 +449,26 @@ class EvalParam(Model):
         """
 
 
+        Rshape = R0.shape
+        R0 = R0.reshape(Rshape[0], -1)
+
         check = self.check_hull(R0)
         R, __ = self.transform_coord(R0)
 
-        out = self.eval_model(R,calcgrad=calcgrad,calcerr=calcerr)
+#         C = self.Coeffs[self.find_index(time)]
+        C, dC = self.get_C(time)
+
+        out = self.eval_model(R,C)
         parameter = out['param']
         parameter[~check] = np.nan
         P = parameter
-        dP = np.full((R0.shape[1],4),np.nan)
+
         if calcgrad:
             gradient = out['grad']
             gradient = self.inverse_transform(R,gradient)
             gradient[~check] = [np.nan,np.nan,np.nan]
             dP = np.array([gradient[:,0],gradient[:,1],gradient[:,2],np.zeros(len(parameter))]).T
+            return P, dP
 
         if calcerr:
             err = out['err']
@@ -551,8 +477,11 @@ class EvalParam(Model):
                 graderr = out['gerr']
                 graderr = self.inverse_transform(R,graderr,self.cp)
                 graderr[~check] = [np.nan,np.nan,np.nan]
+            return P, dP, err, graderr
+        
+        else:
+            return P.reshape(tuple(list(Rshape)[1:]))
 
-        return P, dP
     
     
     def transform_coord(self,R0):
@@ -656,9 +585,8 @@ class EvalParam(Model):
         vert = R_cart[chull.vertices]
 
         r, t, p = cc.cartesian_to_spherical(vert.T[0],vert.T[1],vert.T[2])
-        vertices = np.array([r,t,p]).T
+        self.hv = np.array([r,t,p]).T
 
-        self.hv = np.array(vertices).T
         return self.hv
 
 
@@ -673,9 +601,9 @@ class EvalParam(Model):
                 if input points are expressed as a list of r,t,p points, eg. points = [[r1,t1,p1],[r2,t2,p2],...], R = np.array(points).T
 
         """
-        x, y, z = cc.spherical_to_cartesian(self.hv.T[0],self.hv.T[1],self.hv.T[2])
+        x, y, z = cc.spherical_to_cartesian(self.hull_v[:,0],self.hull_v[:,1],self.hull_v[:,2])
         vert_cart = np.array([x,y,z]).T
-
+        
         hull = ConvexHull(vert_cart)
         check = []
         for R in R0.T:
@@ -691,8 +619,67 @@ class EvalParam(Model):
             check.append(value)
         return np.array(check)
 
+    def get_C(self, t):
+        """
+        Return values for C and dC based on a given time and whether or not time intepolation has been selected
+        
+        Parameters:
+            t: [datetime object]
+                target time
 
+        Returns:
+            C: [ndarray(nbasis)]
+                coefficient array
+            dC: [ndarray(nbasisxnbasis)]
+                covariance matrix
+        """
+            
+        # find unix time of requested point
+        t0 = (t-dt.datetime.utcfromtimestamp(0)).total_seconds()
 
+        # find time of mid-points
+        mt = np.array([(float(ut[0])+float(ut[1]))/2. for ut in self.time[:5]])
+        
+        if t0<np.min(mt) or t0>np.max(mt):
+            print 'Time out of range!'
+            C = np.full(self.nbasis,np.nan)
+            dC = np.full((self.nbasis,self.nbasis),np.nan)
+
+        else:
+            if self.timeinterp:            
+                # find index of neighboring points
+                i = np.argwhere((t0>=mt[:-1]) & (t0<mt[1:])).flatten()[0]
+                # calculate T
+                T = (t0-mt[i])/(mt[i+1]-mt[i])
+                # calculate interpolated values
+                C = (1-T)*self.Coeffs[i,:] + T*self.Coeffs[i+1,:]
+                dC = (1-T)*self.Covariance[i,:,:] + T*self.Covariance[i+1,:,:]
+
+            else:
+                i = np.argmin(np.abs(mt-t0))
+                C = self.Coeffs[i]
+                dC = self.Covariance[i]
+
+        return C, dC
+    
+    def find_index(self, t):
+        """
+        Find the index of a file that is closest to the given time
+
+        Parameters:
+            t: [datetime object]
+                target time
+
+        Returns:
+            rec: [int]
+                index of the record that is closest to the target time
+        """
+
+        time0 = (t-dt.datetime.utcfromtimestamp(0)).total_seconds()
+        time_array = np.array([(float(ut[0])+float(ut[1]))/2. for ut in self.time])
+        rec = np.argmin(np.abs(time_array-time0))
+
+        return rec
 
 
 
@@ -761,78 +748,8 @@ class Fit(EvalParam):
 
     # def __init__(self,date=None,radar=None,code=None,param=None):
     def __init__(self,param=None):
-        self.date = date
         self.radar = radar
-        self.code = code
         self.param = param
-
-
-    def generate_eventlist(self,starttime=None,endtime=None):
-        """
-        Generates an eventlist for a single day that includes all events from that day, regardless of the radar mode that
-         was run.
-
-        Returns:
-            eventlist: [dict]
-                list of dictionaries containing the timestamp, file name, radar mode, and index within the file for a 
-                particular event
-                vaild keys:
-                    'time': timestamp (datetime object)
-                    'filename': file name including full file path
-                    'mode': radar mode
-                    'index': index of this particular event within the file
-        """
-        if starttime is None:
-            starttime = self.date
-            endtime = self.date+dt.timedelta(hours=24)
-        elif endtime is None:
-            endtime = starttime+dt.timedelta(hours=1)
-  
-
-        filelist = pfl.file_list(self.date,radars=[self.radar],criteria=['lp','1min','fitcal'])
-
-        eventlist = []
-        for filename in filelist:
-            experiment = os.path.basename(filename)
-            with tables.open_file(dbname,'r') as h5file:
-                tn = h5file.get_node('/Radars/{}'.format(self.radar.replace('-','')))
-                en = h5file.get_node('/ExpNames/Names')
-                ny = tn[:]['nyear']
-                nm = tn[:]['nmonth']
-                nd = tn[:]['nday']
-                ns = tn[:]['nset']
-
-                # for experiment in self.experiment_list:
-                year = int(experiment[0:4])
-                month = int(experiment[4:6])
-                day = int(experiment[6:8])
-                num = int(experiment[9:12])
-                index = np.where((ny==year) & (nm==month) & (nd==day) & (ns==num))[0]
-                if index.size == 0:
-                    experiment['mode'] = '0000'
-                else:
-                    i = index[0]
-                    eid = tn[i]['nExpId']
-                    mode = en[eid][0]
-                    print mode
-
-
-
-            with tables.open_file(filename, 'r') as h5file:
-                utime = h5file.get_node('/Time/UnixTime')
-                utime = utime.read()
-            for i,t in enumerate(utime):
-                dh = (float(t[0])+float(t[1]))/2.
-                tstmp = dt.datetime.utcfromtimestamp(dh)
-                ststmp = dt.datetime.utcfromtimestamp(float(t[0]))
-                etstmp = dt.datetime.utcfromtimestamp(float(t[1]))
-                if tstmp >= starttime and tstmp < endtime:
-                    eventlist.append({'time':tstmp,'starttime':ststmp,'endtime':etstmp,'filename':filename,'mode':mode,'index':i})
-
-        # Sort eventlist by timestamp
-        eventlist = sorted(eventlist, key=lambda event: event['time'])
-
-        return eventlist
 
 
     def get_ns(self,q):
@@ -858,9 +775,6 @@ class Fit(EvalParam):
             q = q - (self.nbasis-ni)
         nj = q
         return ni, nj
-
-
-
 
 
 
@@ -1606,188 +1520,139 @@ class Fit(EvalParam):
             return C
 
 
-    def fit(self,eventlist):
+    def fit(self):
         """
-        Perform fit on every event in eventlist.
+        Perform fit on every record in file.
 
         Parameters:
-            eventlist: [dict]
-                list of dictionaries containing the timestamp, file name, radar mode, and index within the file for a 
-                particular event
-                vaild keys:
-                    'time': timestamp (datetime object)
-                    'filename': file name including full file path
-                    'mode': radar mode
-                    'index': index of this particular event within the file
-                eventlist can be created by the generate_eventlist() method of the Fit class
+            None
         """
 
-        if not eventlist:
-            raise ValueError('Event list is empty!')
 
-
-        time = []
         Coeffs = []
         Covariance = []
         chi_sq = []
-        cent_point = []
-        hull_v = []
-        raw_coords = []
-        raw_data = []
-        raw_error = []
-        raw_filename = []
-        raw_index = []
 
-        evaluated_modes = {}
-
-        mode_dict = {'WorldDay66m':{'maxk':4,'maxl':6,'cap_lim':6.*np.pi/180.,'reglist':['curvature','0thorder'],'regmethod':'chi2','regscalefac':1.0},
-                     'imaginglp':{'maxk':4,'maxl':6,'cap_lim':6.*np.pi/180.,'reglist':['0thorder'],'regmethod':'chi2','regscalefac':np.nan},
-                     'Convection67m':{'maxk':4,'maxl':6,'cap_lim':6.*np.pi/180.,'reglist':['0thorder'],'regmethod':'chi2','regscalefac':np.nan},
-                     'isinglass':{'maxk':4,'maxl':6,'cap_lim':6.*np.pi/180.,'reglist':['0thorder'],'regmethod':'chi2','regscalefac':np.nan}
-                    }
         
-
-        for item in eventlist:
-
-            print item['time']
-            print item['mode']
-
-            R0, ne0, error = self.param.get_data(item['filename'],item['index'])
-
-            # Find convex hull of original data set
-            try:
-                vertices = self.compute_hull(R0)
-            except:
-                continue
-
-            # Transform coordinates
-            R, cp = self.transform_coord(R0)
-            ne0 = ne0
-            er0 = error
+        self.maxl = LMAX
+        self.maxk = KMAX
+        self.cap_lim = CAPLIMIT
+        self.nbasis = self.maxk*self.maxl**2
+        self.regularization_list = REGULARIZATION_METHOD
+        self.reg_method = REGULARIZATION_PARAMETER_METHOD
+        self.reg_scale_factor = np.nan
 
 
-            radar_mode = item['mode'].split('.')[0]
+        print 'Evaluating Regularization matricies.  This may take a few minutes.'
+        reg_matrices = {}
+        if 'curvature' in self.regularization_list:
+            reg_matrices['Omega'] = self.eval_omega()
+        if '0thorder' in self.regularization_list:
+            reg_matrices['Psi'] = self.eval_psi()
+ 
+        # read data from AMISR fitted file
+        utime, R0, value, error = self.param.get_data(FILENAME)
+ 
+        # Find convex hull of original data set
+        verticies = self.compute_hull(R0)
+        
+        # Transform coordinates
+        R0, cp = self.transform_coord(R0)
 
-            self.maxl = LMAX
-            self.maxk = KMAX
-            self.cap_lim = CAPLIMIT
-            self.nbasis = self.maxk*self.maxl**2
-            self.regularization_list = REGULARIZATION_METHOD
-            self.reg_method = REGULARIZATION_PARAMETER_METHOD
-            self.reg_scale_factor = np.nan
+        # loop over every record and calculate the coefficients
+        for ut, ne0, er0 in zip(utime, value, error):
+            print(dt.datetime.utcfromtimestamp(ut[0]))
+            
+            R = R0[:,np.isfinite(ne0)]
+            er0 = er0[np.isfinite(ne0)]
+            ne0 = ne0[np.isfinite(ne0)]
+
+            # Evaluate Tau regularization matrix - this is based on data and must be in loop
+            if '0thorder' in self.regularization_list:
+                reg_matrices['Tau'] = self.eval_tau(R,ne0,er0)
 
 
-            if radar_mode in evaluated_modes:
-                reg_matrices = evaluated_modes[radar_mode]
-                if '0thorder' in self.regularization_list:
-                    reg_matrices['Tau'] = self.eval_tau(R,ne0,er0)
-            else:
-                print 'New mode {}.  Regularization matrices must be evaluated.  This may take a few minutes.'.format(radar_mode)
-
-                reg_matrices = {}
-                if 'curvature' in self.regularization_list:
-                    reg_matrices['Omega'] = self.eval_omega()
-                if '0thorder' in self.regularization_list:
-                    reg_matrices['Psi'] = self.eval_psi()
-                    reg_matrices['Tau'] = self.eval_tau(R,ne0,er0)
-                evaluated_modes[radar_mode] = reg_matrices
-
+            # if regularization matricies are NaN, skip this record - fit can not be computed
             if np.any([np.any(np.isnan(v.flatten())) for k, v in reg_matrices.items()]):
+                # NaNs in C, dC, c2
+                Coeffs.append(np.full(self.nbasis, np.nan))
+                Covariance.append(np.full((self.nbasis,self.nbasis), np.nan))
+                chi_sq.append(np.nan)                
                 continue
 
-
+            # define matricies
             W = np.array(er0**(-2))[:,None]
             b = ne0[:,None]
             A = self.eval_basis(R)
 
+            # calculate regularization parameters
             reg_params = self.find_reg_param(A,b,W,reg_matrices,method=self.reg_method)
 
-
+            # if regularization parameters are NaN, skip this record - fit can not be computed
             if np.any(np.isnan([v for k, v in reg_params.items()])):
+                # NaNs in C, dC, c2
+                Coeffs.append(np.full(self.nbasis, np.nan))
+                Covariance.append(np.full((self.nbasis,self.nbasis), np.nan))
+                chi_sq.append(np.nan)                
                 continue
 
-
+            # calculate coefficients and covarience matrix
             C, dC = self.eval_C(A,b,W,reg_matrices,reg_params,calccov=True)
-            c2 = sum((np.squeeze(np.dot(A,C))-np.squeeze(b))**2*np.squeeze(W))
 
-            # time.append(item['time'])
-            time.append([item['starttime'],item['endtime']])
+            # calculate chi2
+            c2 = sum((np.squeeze(np.dot(A,C))-np.squeeze(b))**2*np.squeeze(W))
+            
+            # append lists
             Coeffs.append(C)
             Covariance.append(dC)
             chi_sq.append(c2)
-            cent_point.append(cp)
-            hull_v.append(vertices)
-            raw_coords.append(R0)
-            raw_data.append(ne0)
-            raw_error.append(error)
-            raw_filename.append(item['filename'])
-            raw_index.append(item['index'])
 
-        self.time = time
-        self.Coeffs = Coeffs
-        self.Covariance = Covariance
-        self.chi_sq = chi_sq
-        self.cent_point = cent_point
-        self.hull_v = hull_v
-        self.raw_coords = raw_coords
-        self.raw_data = raw_data
-        self.raw_error = raw_error
-        self.raw_filename = raw_filename
-        self.raw_index = raw_index
+        self.time = utime
+        self.Coeffs = np.array(Coeffs)
+        self.Covariance = np.array(Covariance)
+        self.chi_sq = np.array(chi_sq)
+        self.cent_point = cp
+        self.hull_v = verticies
+        self.raw_coords = R0
+        self.raw_data = value
+        self.raw_error = error
+        self.raw_filename = FILENAME
 
 
 
-    def saveh5(self,filename=None):
+    def saveh5(self):
         """
         Saves coefficients to a hdf5 file
 
         Parameters:
-            filename: Optional [str]
-                name of file to save
-                default file is ./Coefficients/YYYMMDD_RADAR_PARAM.h5
+            None
         """
+        
+        with tables.open_file(OUTFILENAME, 'w') as h5out:
 
-        h5outname = wdir+'/Coefficients/{:04d}{:02d}{:02d}_{}_{}.h5'.format(self.date.year,self.date.month,self.date.day,self.radar,self.param.key)
-        if filename:
-            h5outname = filename
+            cgroup = h5out.create_group('/','Coeffs','Dataset')
+            fgroup = h5out.create_group('/','FitParams','Dataset')
+            dgroup = h5out.create_group('/','RawData','Dataset')
 
-        h5out = tables.open_file(h5outname, 'w')
+            h5out.create_array('/', 'UnixTime', self.time)
 
-        utime = [[(t[0]-dt.datetime.utcfromtimestamp(0)).total_seconds(),(t[1]-dt.datetime.utcfromtimestamp(0)).total_seconds()] for t in self.time]
+            h5out.create_array(cgroup, 'C', self.Coeffs)
+            h5out.create_array(cgroup, 'dC', self.Covariance)
 
-        cgroup = h5out.create_group('/','Coeffs','Dataset')
-        fgroup = h5out.create_group('/','FitParams','Dataset')
-        dgroup = h5out.create_group('/','RawData','Dataset')
+            h5out.create_array(fgroup, 'kmax', self.maxk)
+            h5out.create_array(fgroup, 'lmax', self.maxl)
+            h5out.create_array(fgroup, 'cap_lim', self.cap_lim)
+            h5out.create_array(fgroup, 'reglist', self.regularization_list)
+            h5out.create_array(fgroup, 'regmethod', self.reg_method)
+            h5out.create_array(fgroup, 'regscalefac', self.reg_scale_factor)
+            h5out.create_array(fgroup, 'chi2', self.chi_sq)
+            h5out.create_array(fgroup, 'center_point', self.cent_point)
+            h5out.create_array(fgroup, 'hull_verticies', self.hull_v)
 
-        h5out.create_array('/', 'UnixTime', utime)
-
-        h5out.create_array(cgroup, 'C', self.Coeffs)
-        h5out.create_array(cgroup, 'dC', self.Covariance)
-
-        h5out.create_array(fgroup, 'kmax', self.maxk)
-        h5out.create_array(fgroup, 'lmax', self.maxl)
-        h5out.create_array(fgroup, 'cap_lim', self.cap_lim)
-        h5out.create_array(fgroup, 'reglist', self.regularization_list)
-        h5out.create_array(fgroup, 'regmethod', self.reg_method)
-        h5out.create_array(fgroup, 'regscalefac', self.reg_scale_factor)
-        h5out.create_array(fgroup, 'chi2', self.chi_sq)
-        h5out.create_array(fgroup, 'center_point', self.cent_point)
-        vlarray = h5out.create_vlarray(fgroup, 'hull_vertices', tables.FloatAtom(shape=3))
-        for v in self.hull_v:
-            vlarray.append(v.T)
-
-        h5out.create_array(dgroup, 'filename', self.raw_filename)
-        h5out.create_array(dgroup, 'index', self.raw_index)
-        rarray = h5out.create_vlarray(dgroup, 'coordinates', tables.FloatAtom(shape=3))
-        darray = h5out.create_vlarray(dgroup, 'data', tables.FloatAtom(shape=1))
-        earray = h5out.create_vlarray(dgroup, 'error', tables.FloatAtom(shape=1))
-        for r,d,e in zip(self.raw_coords,self.raw_data,self.raw_error):
-            rarray.append(r.T)
-            darray.append(d[:,None])
-            earray.append(e[:,None])
-
-        h5out.close()
-
+            h5out.create_array(dgroup, 'filename', self.raw_filename)
+            h5out.create_array(dgroup, 'coordinates', self.raw_coords)
+            h5out.create_array(dgroup, 'data', self.raw_data)
+            h5out.create_array(dgroup, 'error', self.raw_error)
 
 
 
@@ -1927,6 +1792,26 @@ class Fit(EvalParam):
         plt.show()
 
 
+    def maps(self):
+        
+        self.timeinterp = False
+        time = np.array([dt.datetime.utcfromtimestamp(t) for t in self.time[:,1]])
+
+        # define an input lat/lon grid
+        latrange = np.linspace(70.,80.,50)
+        lonrange = np.linspace(-100.,-80.,50)
+        latitude, longitude = np.meshgrid(latrange,lonrange)
+        altitude = np.full(latitude.shape, 300.)
+        
+        # Convert input coordinates to geocentric-spherical
+        r, t, p = cc.geodetic_to_spherical(latitude,longitude,altitude)
+        R0 = np.array([r,t,p])
+
+        for t in time:
+            ne = self.getparam(t,R0)
+            print ne[np.isfinite(ne)]
+
+
 
 
 
@@ -1967,83 +1852,175 @@ class AMISR_param(object):
 
 
 
-    def get_data(self,filename,index):
+#     def get_data(self,filename,index):
+# #     def get_data(self,filename):
+#         """
+#         Read a particular index of a processed AMISR hdf5 file and return the coordinates, values, and errors as arrays.
+
+#         Parameters:
+#             filename: [str]
+#                 filename/path of processed AMISR hdf5 file
+#             index: [int]
+#                 record index
+
+#         Returns:
+#             R0: [ndarray (npointsx3)]
+#                 coordinates of each data point in spherical coordinate system
+#             value: [ndarray (npoints)]
+#                 parameter value of each data point
+#             error: [ndarray (npoints)]
+#                 error in parameter values
+#         """
+
+
+#         with tables.open_file(filename,'r') as h5file:
+
+#             alt = h5file.get_node('/Geomag/Altitude')
+#             lat = h5file.get_node('/Geomag/Latitude')
+#             lon = h5file.get_node('/Geomag/Longitude')
+#             c2 = h5file.get_node('/FittedParams/FitInfo/chi2')
+#             fc = h5file.get_node('/FittedParams/FitInfo/fitcode')
+#             imass = h5file.get_node('/FittedParams/IonMass')
+#             if self.key == 'dens':
+#                 val = h5file.get_node('/FittedParams/Ne')
+#                 err = h5file.get_node('/FittedParams/dNe')
+#             else:
+#                 fits = h5file.get_node('/FittedParams/Fits')
+#                 err = h5file.get_node('/FittedParams/Errors')
+
+
+#             altitude = alt.read().flatten()
+#             latitude = lat.read().flatten()
+#             longitude = lon.read().flatten()
+#             chi2 = c2[index].flatten()
+#             fitcode = fc[index].flatten()
+#             imass = imass.read()
+
+
+#             # This accounts for an error in some of the hdf5 files where chi2 is overestimated by 369.
+#             if np.mean(chi2) > 100.:
+#                 chi2 = chi2 - 369.
+
+#             # choose index based on ending of key
+#             if self.key.endswith('_O'):
+#                 j = int(np.where(imass == 16)[0])
+#             elif self.key.endswith('_O2'):
+#                 j = int(np.where(imass == 32)[0])
+#             elif self.key.endswith('_NO'):
+#                 j = int(np.where(imass == 30)[0])
+#             elif self.key.endswith('_N2'):
+#                 j = int(np.where(imass == 28)[0])
+#             elif self.key.endswith('_N'):
+#                 j = int(np.where(imass == 14)[0])
+#             else:
+#                 j = -1
+
+
+#             if self.key == 'dens':
+#                 value = np.array(val[index].flatten())
+#                 error = np.array(err[index].flatten())
+#             if self.key.startswith('frac'):
+#                 value = np.array(fits[index,:,:,j,0].flatten())
+#                 error = np.array(err[index,:,:,j,0].flatten())
+#             if self.key.startswith('temp'):
+#                 value = np.array(fits[index,:,:,j,1].flatten())
+#                 error = np.array(err[index,:,:,j,1].flatten())
+#             if self.key.startswith('colfreq'):
+#                 value = np.array(fits[index,:,:,j,2].flatten())
+#                 error = np.array(err[index,:,:,j,2].flatten())
+
+
+
+#         # data_check: 2D boolian array for removing "bad" data
+#         # Each column correpsonds to a different "check" condition
+#         # TRUE for "GOOD" point; FALSE for "BAD" point
+#         # A "good" record that shouldn't be removed should be TRUE for EVERY check condition
+#         if self.key == 'dens':
+#             data_check = np.array([np.isfinite(error),error>1.e10,fitcode>0,fitcode<5,chi2<10,chi2>0.1])
+#         elif 'temp' in self.key:
+#             data_check = np.array([np.isfinite(error),fitcode>0,fitcode<5,chi2<10,chi2>0.1])
+#         else:
+#             data_check = np.array([np.isfinite(value)])
+
+#         # ALL elements of data_check MUST be TRUE for a particular index to be kept
+#         finite_indicies = np.where(np.all(data_check,axis=0))[0]
+
+#         # reform the data arrays only with "good" data
+#         altitude = np.array(altitude[finite_indicies])
+#         latitude = np.array(latitude[finite_indicies])
+#         longitude = np.array(longitude[finite_indicies])
+#         error = np.array(error[finite_indicies])
+#         value = np.array(value[finite_indicies])
+
+
+#         # Convert input coordinates to geocentric-spherical
+#         r, t, p = cc.geodetic_to_spherical(latitude,longitude,altitude/1000.)
+#         R0 = np.array([r,t,p])
+
+#         return R0, value, error
+
+
+    def get_data(self,filename):
         """
-        Read a particular index of a processed AMISR hdf5 file and return the coordinates, values, and errors as arrays.
+        Read parameter from a processed AMISR hdf5 file and return the time, coordinates, values, and errors as arrays.
 
         Parameters:
             filename: [str]
                 filename/path of processed AMISR hdf5 file
-            index: [int]
-                record index
 
         Returns:
-            R0: [ndarray (npointsx3)]
+            utime: [ndarray (nrecordsx2)]
+                start and end time of each record (Unix Time)
+            R0: [ndarray (3xnpoints)]
                 coordinates of each data point in spherical coordinate system
-            value: [ndarray (npoints)]
+            value: [ndarray (nrecordsxnpoints)]
                 parameter value of each data point
-            error: [ndarray (npoints)]
+            error: [ndarray (nrecordsxnpoints)]
                 error in parameter values
         """
 
+        index_dict = {'frac':0, 'temp':1, 'colfreq':2}
+        mass_dict = {'O':16, 'O2':32, 'NO':30, 'N2':28, 'N':14}
 
         with tables.open_file(filename,'r') as h5file:
 
-            alt = h5file.get_node('/Geomag/Altitude')
-            lat = h5file.get_node('/Geomag/Latitude')
-            lon = h5file.get_node('/Geomag/Longitude')
-            c2 = h5file.get_node('/FittedParams/FitInfo/chi2')
-            fc = h5file.get_node('/FittedParams/FitInfo/fitcode')
-            imass = h5file.get_node('/FittedParams/IonMass')
-            if self.key == 'dens':
-                val = h5file.get_node('/FittedParams/Ne')
-                err = h5file.get_node('/FittedParams/dNe')
-            else:
-                fits = h5file.get_node('/FittedParams/Fits')
-                err = h5file.get_node('/FittedParams/Errors')
+            utime = h5file.get_node('/Time/UnixTime')[:]
 
-
-            altitude = alt.read().flatten()
-            latitude = lat.read().flatten()
-            longitude = lon.read().flatten()
-            chi2 = c2[index].flatten()
-            fitcode = fc[index].flatten()
-            imass = imass.read()
-
-
-            # This accounts for an error in some of the hdf5 files where chi2 is overestimated by 369.
-            if np.mean(chi2) > 100.:
-                chi2 = chi2 - 369.
-
-            # choose index based on ending of key
-            if self.key.endswith('_O'):
-                j = int(np.where(imass == 16)[0])
-            elif self.key.endswith('_O2'):
-                j = int(np.where(imass == 32)[0])
-            elif self.key.endswith('_NO'):
-                j = int(np.where(imass == 30)[0])
-            elif self.key.endswith('_N2'):
-                j = int(np.where(imass == 28)[0])
-            elif self.key.endswith('_N'):
-                j = int(np.where(imass == 14)[0])
-            else:
-                j = -1
-
+            alt = h5file.get_node('/Geomag/Altitude')[:]
+            lat = h5file.get_node('/Geomag/Latitude')[:]
+            lon = h5file.get_node('/Geomag/Longitude')[:]
+            c2 = h5file.get_node('/FittedParams/FitInfo/chi2')[:]
+            fc = h5file.get_node('/FittedParams/FitInfo/fitcode')[:]
+            imass = h5file.get_node('/FittedParams/IonMass')[:]
 
             if self.key == 'dens':
-                value = np.array(val[index].flatten())
-                error = np.array(err[index].flatten())
-            if self.key.startswith('frac'):
-                value = np.array(fits[index,:,:,j,0].flatten())
-                error = np.array(err[index,:,:,j,0].flatten())
-            if self.key.startswith('temp'):
-                value = np.array(fits[index,:,:,j,1].flatten())
-                error = np.array(err[index,:,:,j,1].flatten())
-            if self.key.startswith('colfreq'):
-                value = np.array(fits[index,:,:,j,2].flatten())
-                error = np.array(err[index,:,:,j,2].flatten())
+                val = h5file.get_node('/FittedParams/Ne')[:]
+                err = h5file.get_node('/FittedParams/dNe')[:]
+            else:
+                param = self.key.split('_')
+                # find i index based on what the key starts with
+                i = index_dict[param[0]]
+                # find m index based on what the key ends with
+                try:
+                    m = int(np.where(imass == mass_dict[param[1]])[0])
+                except IndexError:
+                    m = -1
+                val = h5file.get_node('/FittedParams/Fits')[:,:,:,m,i]
+                err = h5file.get_node('/FittedParams/Errors')[:,:,:,m,i]
 
 
+        altitude = alt.flatten()
+        latitude = lat.flatten()
+        longitude = lon.flatten()
+        chi2 = c2.reshape(c2.shape[0], -1)
+        fitcode = fc.reshape(fc.shape[0], -1)
+        
+        value = val.reshape(val.shape[0], -1)
+        error = err.reshape(err.shape[0], -1)
+
+        # This accounts for an error in some of the hdf5 files where chi2 is overestimated by 369.
+        if np.nanmedian(chi2) > 100.:
+            chi2 = chi2 - 369.
 
         # data_check: 2D boolian array for removing "bad" data
         # Each column correpsonds to a different "check" condition
@@ -2056,23 +2033,27 @@ class AMISR_param(object):
         else:
             data_check = np.array([np.isfinite(value)])
 
-        # ALL elements of data_check MUST be TRUE for a particular index to be kept
-        finite_indicies = np.where(np.all(data_check,axis=0))[0]
-
-        # reform the data arrays only with "good" data
-        altitude = np.array(altitude[finite_indicies])
-        latitude = np.array(latitude[finite_indicies])
-        longitude = np.array(longitude[finite_indicies])
-        error = np.array(error[finite_indicies])
-        value = np.array(value[finite_indicies])
-
-
+        # If ANY elements of data_check are FALSE, flag index as bad data
+        bad_data = np.squeeze(np.any(data_check==False,axis=0,keepdims=True))
+        value[bad_data] = np.nan
+        error[bad_data] = np.nan
+        
+        # remove the points where coordinate arrays are NaN
+        # these points usually correspond to altitude bins that were specified by the fitter but a particular beam does not reach
+        value = value[:,np.isfinite(altitude)]
+        error = error[:,np.isfinite(altitude)]
+        latitude = latitude[np.isfinite(altitude)]
+        longitude = longitude[np.isfinite(altitude)]
+        altitude = altitude[np.isfinite(altitude)]
+        
+        
         # Convert input coordinates to geocentric-spherical
         r, t, p = cc.geodetic_to_spherical(latitude,longitude,altitude/1000.)
         R0 = np.array([r,t,p])
 
-        return R0, value, error
-
+        return utime, R0, value, error
+    
+    
     def eval_zeroth_order(self,x,data,error):
         """
         Find the coefficients for the zeroth order function
@@ -2211,45 +2192,45 @@ def find_index(filename,time):
 
 
 
-def generate_eventlist_standalone(date,radar):
-    """
-    Generates an eventlist for a single day that includes all events from that day, regardless of the radar mode that
-     was run.  This standalone version exists so event lists can be generated without nessisarially initializing the
-     Fit class.
+# def generate_eventlist_standalone(date,radar):
+#     """
+#     Generates an eventlist for a single day that includes all events from that day, regardless of the radar mode that
+#      was run.  This standalone version exists so event lists can be generated without nessisarially initializing the
+#      Fit class.
 
-    Returns:
-        eventlist: [dict]
-            list of dictionaries containing the timestamp, file name, radar mode, and index within the file for a 
-            particular event
-    """
+#     Returns:
+#         eventlist: [dict]
+#             list of dictionaries containing the timestamp, file name, radar mode, and index within the file for a 
+#             particular event
+#     """
 
-    eventlist = []
-    filedir = localpath+'/processed_data/'+radar+'/{:04d}/{:02d}'.format(date.year,date.month)
+#     eventlist = []
+#     filedir = localpath+'/processed_data/'+radar+'/{:04d}/{:02d}'.format(date.year,date.month)
 
-    num_sep = filedir.count(os.path.sep)
-    for root, dirs, files in os.walk(filedir):
-        num_sep_this = root.count(os.path.sep)
-        if (num_sep + 2 == num_sep_this) and ('.bad' not in root) and ('.noproc' not in root) and ('.old' not in root):
-            for file in files:
-                if file.endswith('.h5') and ('lp' in file):
-                    filename = os.path.join(root,file)
-                    print filename
-                    filepath = root.split('/')
-                    experiment = filepath[num_sep+1]
-                    mode = experiment.split('.')[0]
+#     num_sep = filedir.count(os.path.sep)
+#     for root, dirs, files in os.walk(filedir):
+#         num_sep_this = root.count(os.path.sep)
+#         if (num_sep + 2 == num_sep_this) and ('.bad' not in root) and ('.noproc' not in root) and ('.old' not in root):
+#             for file in files:
+#                 if file.endswith('.h5') and ('lp' in file):
+#                     filename = os.path.join(root,file)
+#                     print filename
+#                     filepath = root.split('/')
+#                     experiment = filepath[num_sep+1]
+#                     mode = experiment.split('.')[0]
 
-                    data = io_utils.read_partial_h5file(filename,['/Time'])
-                    utime = data['/Time']['UnixTime']
-                    for i,t in enumerate(utime):
-                        dh = (float(t[0])+float(t[1]))/2.
-                        tstmp = dt.datetime.utcfromtimestamp(dh)
-                        if tstmp >= date and tstmp < date+dt.timedelta(hours=24):
-                            eventlist.append({'time':tstmp,'filename':filename,'mode':mode,'index':i})
+#                     data = io_utils.read_partial_h5file(filename,['/Time'])
+#                     utime = data['/Time']['UnixTime']
+#                     for i,t in enumerate(utime):
+#                         dh = (float(t[0])+float(t[1]))/2.
+#                         tstmp = dt.datetime.utcfromtimestamp(dh)
+#                         if tstmp >= date and tstmp < date+dt.timedelta(hours=24):
+#                             eventlist.append({'time':tstmp,'filename':filename,'mode':mode,'index':i})
 
-    # Sort eventlist by timestamp
-    eventlist = sorted(eventlist, key=lambda event: event['time'])
+#     # Sort eventlist by timestamp
+#     eventlist = sorted(eventlist, key=lambda event: event['time'])
 
-    return eventlist
+#     return eventlist
 
 
 	
@@ -2257,14 +2238,16 @@ def main():
 
     param = AMISR_param('dens')
     dayfit = Fit(param=param)
-    eventlist = dayfit.generate_eventlist()
-    dayfit.fit(eventlist)
-    # dayfit.saveh5(filename='test_out.h5')
+    dayfit.fit()
+    dayfit.saveh5()
 
-    targtime = dt.datetime(year,month,day,hour,minute)
-    altitude = 300.
-    longitude = -90.
-    dayfit.validate(targtime,altitude,longitude)
+#     dayfit.loadh5(filename='test_out.h5')
+#     dayfit.maps()
+
+#     targtime = dt.datetime(year,month,day,hour,minute)
+#     altitude = 300.
+#     longitude = -90.
+#     dayfit.validate(targtime,altitude,longitude)
 
 	
 	
