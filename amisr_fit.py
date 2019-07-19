@@ -382,10 +382,11 @@ class EvalParam(Model):
         self.timetol = timetol
         self.timeinterp = timeinterp
 
-        try:
-            self.loadh5()
-        except Exception as e:
-            print e
+        self.loadh5(filename=coeff_filename)
+#         try:
+#             self.loadh5()
+#         except Exception as e:
+#             print e
             # print 'WARNING: {:04d}{:02d}{:02d}_{}_{}.h5 does not exist! A valid coefficient file must be loaded.'.format(self.datetime.year,self.datetime.month,self.datetime.day,self.radar,self.param.key)
 
 
@@ -600,7 +601,7 @@ class EvalParam(Model):
                 if input points are expressed as a list of r,t,p points, eg. points = [[r1,t1,p1],[r2,t2,p2],...], R = np.array(points).T
 
         """
-        x, y, z = cc.spherical_to_cartesian(self.hull_v[0],self.hull_v[1],self.hull_v[2])
+        x, y, z = cc.spherical_to_cartesian(self.hull_v[:,0],self.hull_v[:,1],self.hull_v[:,2])
         vert_cart = np.array([x,y,z]).T
         
         hull = ConvexHull(vert_cart)
@@ -1554,12 +1555,13 @@ class Fit(EvalParam):
  
         # Find convex hull of original data set
         verticies = self.compute_hull(R0)
-
+        
         # Transform coordinates
         R0, cp = self.transform_coord(R0)
 
         # loop over every record and calculate the coefficients
-        for ne0, er0 in zip(value[:10,:],error[:10,:]):
+        for ut, ne0, er0 in zip(utime, value, error):
+            print(dt.datetime.utcfromtimestamp(ut[0]))
             
             R = R0[:,np.isfinite(ne0)]
             er0 = er0[np.isfinite(ne0)]
@@ -2236,10 +2238,11 @@ def main():
 
     param = AMISR_param('dens')
     dayfit = Fit(param=param)
-#     dayfit.fit()
-#     dayfit.saveh5()
-    dayfit.loadh5(filename='test_out.h5')
-    dayfit.maps()
+    dayfit.fit()
+    dayfit.saveh5()
+
+#     dayfit.loadh5(filename='test_out.h5')
+#     dayfit.maps()
 
 #     targtime = dt.datetime(year,month,day,hour,minute)
 #     altitude = 300.
