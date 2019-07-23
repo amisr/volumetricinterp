@@ -260,7 +260,7 @@ class Model(object):
         if calcerr:
             if self.dC is None:
                 if verbose:
-                    print 'Covariance matrix not provided. Errors will not be calculated.'
+                    print('Covariance matrix not provided. Errors will not be calculated.')
             error = np.diag(np.squeeze(np.dot(A,np.dot(self.dC,A.T))))
             out['err'] = error
 
@@ -638,10 +638,10 @@ class EvalParam(Model):
         t0 = (t-dt.datetime.utcfromtimestamp(0)).total_seconds()
 
         # find time of mid-points
-        mt = np.array([(float(ut[0])+float(ut[1]))/2. for ut in self.time[:5]])
+        mt = np.array([(float(ut[0])+float(ut[1]))/2. for ut in self.time])
         
         if t0<np.min(mt) or t0>np.max(mt):
-            print 'Time out of range!'
+            print('Time out of range!')
             C = np.full(self.nbasis,np.nan)
             dC = np.full((self.nbasis,self.nbasis),np.nan)
 
@@ -1206,7 +1206,7 @@ class Fit(EvalParam):
                 reg_params[rl] = reg_methods[method](A,b,W,reg_matrices,rl)
             except ValueError as err:
                 print(err)
-                print 'Returning NANs for regularization parameters.'
+                print('Returning NANs for regularization parameters.')
                 reg_params[rl] = np.nan
 
         return reg_params
@@ -1248,7 +1248,7 @@ class Fit(EvalParam):
             alpha = 0.
             val = self.chi2objfunct(alpha,A,b,W,reg_matrices,nu,reg)
             if val<0:
-                print 'Too smooth to find regularization parameter. Returning alpha=0.'
+                print('Too smooth to find regularization parameter. Returning alpha=0.')
                 return 0
 
             while val0*val > 0:
@@ -1543,7 +1543,7 @@ class Fit(EvalParam):
         self.reg_scale_factor = np.nan
 
 
-        print 'Evaluating Regularization matricies.  This may take a few minutes.'
+        print('Evaluating Regularization matricies.  This may take a few minutes.')
         reg_matrices = {}
         if 'curvature' in self.regularization_list:
             reg_matrices['Omega'] = self.eval_omega()
@@ -1730,7 +1730,7 @@ class Fit(EvalParam):
         dens3d = self.rd
         err3d = self.re
 
-        print lat3d
+#         print lat3d
 
         raw_lat = lat3d[np.where(abs(alt3d-altitude)<10.)]
         raw_lon = lon3d[np.where(abs(alt3d-altitude)<10.)]
@@ -1809,7 +1809,7 @@ class Fit(EvalParam):
 
         for t in time:
             ne = self.getparam(t,R0)
-            print ne[np.isfinite(ne)]
+            print(ne[np.isfinite(ne)])
 
 
 
