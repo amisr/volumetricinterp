@@ -113,7 +113,7 @@ class Model(object):
             m: [int]
                 azimuthal index number corresponding to n
         """
-        k = n/(self.maxl**2)
+        k = n//(self.maxl**2)
         r = n%(self.maxl**2)
         l = np.floor(np.sqrt(r))
         m = r-l*(l+1)
