@@ -19,34 +19,6 @@ from mpl_toolkits.mplot3d import Axes3D
 # TODO: put all this in a config file
 RE = 6371.2*1000.           # Earth Radius (m)	
 
-# if fitting, these parameters should be pulled from a config file
-# if evaluating, these parameters should come from coefficient file
-# required for model
-KMAX = 4
-LMAX = 6
-CAPLIMIT = 6.*np.pi/180.
-
-# required for fit
-REGULARIZATION_METHOD = ['0thorder']
-REGULARIZATION_PARAMETER_METHOD = 'chi2'
-PARAMETER_NAME = 'Electron Density'
-MAX_Z_INT = np.inf
-PARAMETER_RANGE = [0, 3e11]
-PARAMETER_UNITS = 'm$^-3$'
-
-# year = 2016
-# month = 12
-# day = 27
-# hour = 22
-# minute = 0
-
-# date = dt.datetime(year,month,day)
-
-FILENAME = '/home/jovyan/mount/data/RISR-N/20171119.001_lp_1min-fitcal.h5'
-OUTFILENAME = 'test_out.h5'
-radar = 'RISR-N'
-code = 'lp'
-
 
 
 # TODO: put seperate classes in different files
@@ -497,18 +469,15 @@ class EvalParam(Model):
             
             self.time = h5file.get_node('/UnixTime')[:]
 
-#             self.maxk = h5file.get_node('/FitParams/kmax').read()
-#             self.maxl = h5file.get_node('/FitParams/lmax').read()
-#             self.cap_lim = h5file.get_node('/FitParams/cap_lim').read()
             maxk = h5file.get_node('/FitParams/kmax').read()
             maxl = h5file.get_node('/FitParams/lmax').read()
             cap_lim = h5file.get_node('/FitParams/cap_lim').read()
+
             self.cent_point = h5file.get_node('/FitParams/center_point')[:]
             self.hull_v = h5file.get_node('/FitParams/hull_verticies')[:]
 
         super().__init__(maxk,maxl,cap_lim)
 
-#         self.nbasis = self.maxk*self.maxl**2
                 
                 
                 
@@ -749,21 +718,14 @@ class EvalParam(Model):
 
 
 
-# TODO: inherent Model not EvalParam?
 class Fit(Model):
     """
     This class performs the least-squares fit of the data to the 3D analytic model to find the coefficient vector for the model.
     It also handles calculating regularization matricies and parameters if nessisary.
 
     Parameters:
-        date: [date object]
-            date to evaluate the model at
-        radar: [str]
-            radar to evaluate model for (valid options are 'RISR-N', 'RISR-C', or 'PFISR')
-        code: [str]
-            Long-pulse ('lp') or Alternating Code ('ac')
-        param: [AMISR_param object]
-            parameter to evaluate - either density or temperature
+        config_file: [str]
+            config file that specifies the fit parameters/options
 
     Atributes:
         date: date the model is fit for
@@ -811,11 +773,7 @@ class Fit(Model):
 
     """
 
-    # def __init__(self,date=None,radar=None,code=None,param=None):
-#     def __init__(self,param=None):
     def __init__(self,config_file):
-#         self.radar = radar
-#         self.param = param
         
         self.read_config(config_file)
         
@@ -824,54 +782,16 @@ class Fit(Model):
         config = configparser.ConfigParser()
         config.read(config_file)
 
-#         KMAX = 4
-# LMAX = 6
-# CAPLIMIT = 6.*np.pi/180.
-
-# # required for fit
-# REGULARIZATION_METHOD = ['0thorder']
-# REGULARIZATION_PARAMETER_METHOD = 'chi2'
-# PARAMETER_NAME = 'Electron Density'
-# MAX_Z_INT = np.inf
-# PARAMETER_RANGE = [0, 3e11]
-# PARAMETER_UNITS = 'm$^-3$'
-
-# # year = 2016
-# # month = 12
-# # day = 27
-# # hour = 22
-# # minute = 0
-
-# # date = dt.datetime(year,month,day)
-
-# FILENAME = '/home/jovyan/mount/data/RISR-N/20171119.001_lp_1min-fitcal.h5'
-# OUTFILENAME = 'test_out.h5'
-# radar = 'RISR-N'
-# code = 'lp'
-
-#         self.datafile = config.get('DEFAULT', 'DATAFILE')
-#         self.outfilename = config.get('DEFAULT', 'OUTFILENAME')
-#         self.chirp = eval(config.get('DEFAULT', 'CHIRP'))
-#         self.covar = eval(config.get('DEFAULT', 'COVAR'))
-#         self.altlim = eval(config.get('DEFAULT', 'ALTLIM'))
-#         self.nelim = eval(config.get('DEFAULT', 'NELIM'))
-        
         maxk = eval(config.get('DEFAULT','MAXK'))
         maxl = eval(config.get('DEFAULT','MAXL'))
         cap_lim = eval(config.get('DEFAULT','CAP_LIM'))
         
         super().__init__(maxk,maxl,cap_lim)
         
-        # move these things to a proper initialization function
-#         self.maxl = LMAX
-#         self.maxk = KMAX
-#         self.cap_lim = CAPLIMIT
-#         self.nbasis = self.maxk*self.maxl**2
         self.regularization_list = eval(config.get('DEFAULT','REGULARIZATION_LIST'))
         self.reg_method = eval(config.get('DEFAULT','REGULARIZATION_METHOD'))
-#         self.reg_scale_factor = np.nan
-        self.max_z_int = eval(config.get('DEFAULT','MAX_Z_INT'))
-                               
+        self.max_z_int = float(config.get('DEFAULT','MAX_Z_INT'))
+    
         self.filename = eval(config.get('DEFAULT','FILENAME'))
         self.outputfilename = eval(config.get('DEFAULT','OUTPUTFILENAME'))
                                
@@ -963,7 +883,8 @@ class Fit(Model):
         kj, lj, mj = self.basis_numbers(nj)
         vi = self.nu(ni)
         vj = self.nu(nj)
-        Iz = scipy.integrate.quad(self.omega_z_integrand, 0., self.param.max_zint, args=(ki,kj))
+#         Iz = scipy.integrate.quad(self.omega_z_integrand, 0., self.param.max_zint, args=(ki,kj))
+        Iz = scipy.integrate.quad(self.omega_z_integrand, 0., self.max_z_int, args=(ki,kj))
         It = scipy.integrate.quad(self.omega_t_integrand, 0, self.cap_lim, args=(vi,vj,mi,mj))
         Ip = scipy.integrate.quad(self.omega_p_integrand, 0, 2*np.pi, args=(vi,vj,mi,mj))
         O = Iz[0]*It[0]*Ip[0]
@@ -1092,7 +1013,8 @@ class Fit(Model):
         kj, lj, mj = self.basis_numbers(nj)
         vi = self.nu(ni)
         vj = self.nu(nj)
-        Iz = scipy.integrate.quad(self.psi_z_integrand, 0., self.param.max_zint, args=(ki,kj))
+#         Iz = scipy.integrate.quad(self.psi_z_integrand, 0., self.param.max_zint, args=(ki,kj))
+        Iz = scipy.integrate.quad(self.psi_z_integrand, 0., self.max_z_int, args=(ki,kj))
         It = scipy.integrate.quad(self.psi_t_integrand, 0, self.cap_lim, args=(vi,vj,mi,mj))
         Ip = scipy.integrate.quad(self.psi_p_integrand, 0, 2*np.pi, args=(vi,vj,mi,mj))
         P = Iz[0]*It[0]*Ip[0]
@@ -1216,8 +1138,8 @@ class Fit(Model):
         """
         k, l, m = self.basis_numbers(n)
         v = self.nu(n)
-        Iz = scipy.integrate.quad(self.tau_z_integrand, 0., self.param.max_zint, args=(k))
-        # Iz = scipy.integrate.quad(self.tau_z_integrand, 0., 15, args=(k))
+#         Iz = scipy.integrate.quad(self.tau_z_integrand, 0., self.param.max_zint, args=(k))
+        Iz = scipy.integrate.quad(self.tau_z_integrand, 0., self.max_z_int, args=(k))
         It = scipy.integrate.quad(self.tau_t_integrand, 0, self.cap_lim, args=(v,m))
         Ip = scipy.integrate.quad(self.tau_p_integrand, 0, 2*np.pi, args=(v,m))
         # print Iz, It, Ip
@@ -1693,16 +1615,6 @@ class Fit(Model):
         Covariance = []
         chi_sq = []
 
-#         # move these things to a proper initialization function
-#         self.maxl = LMAX
-#         self.maxk = KMAX
-#         self.cap_lim = CAPLIMIT
-#         self.nbasis = self.maxk*self.maxl**2
-#         self.regularization_list = REGULARIZATION_METHOD
-#         self.reg_method = REGULARIZATION_PARAMETER_METHOD
-#         self.reg_scale_factor = np.nan
-
-
         print('Evaluating Regularization matricies.  This may take a few minutes.')
         reg_matrices = {}
         if 'curvature' in self.regularization_list:
@@ -1784,7 +1696,7 @@ class Fit(Model):
         self.raw_coords = R00
         self.raw_data = value
         self.raw_error = error
-        self.raw_filename = FILENAME
+        self.raw_filename = self.filename
 
 
 
@@ -2059,10 +1971,10 @@ class AMISR_param(object):
     """
 
     def __init__(self,key):
-        self.name = PARAMETER_NAME
-        self.max_zint = MAX_Z_INT
-        self.vrange = PARAMETER_RANGE
-        self.units = PARAMETER_UNITS
+#         self.name = PARAMETER_NAME
+#         self.max_zint = MAX_Z_INT
+#         self.vrange = PARAMETER_RANGE
+#         self.units = PARAMETER_UNITS
         self.key = key
 
 
