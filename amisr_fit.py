@@ -8,6 +8,7 @@ from scipy.spatial import ConvexHull
 import datetime as dt
 import coord_convert as cc   # TODO: change to using pymap3d
 import tables
+import configparser
 
 import matplotlib.pyplot as plt
 import matplotlib
@@ -20,12 +21,14 @@ RE = 6371.2*1000.           # Earth Radius (m)
 
 # if fitting, these parameters should be pulled from a config file
 # if evaluating, these parameters should come from coefficient file
+# required for model
 KMAX = 4
 LMAX = 6
 CAPLIMIT = 6.*np.pi/180.
+
+# required for fit
 REGULARIZATION_METHOD = ['0thorder']
 REGULARIZATION_PARAMETER_METHOD = 'chi2'
-
 PARAMETER_NAME = 'Electron Density'
 MAX_Z_INT = np.inf
 PARAMETER_RANGE = [0, 3e11]
@@ -90,11 +93,11 @@ class Model(object):
         - All methods EXCEPT for eval_model() can be called without specifying C or dC.
     """
 
-    def __init__(self,maxk,maxl,cap_lim=6.*np.pi/180.):
+    def __init__(self,maxk,maxl,cap_lim=6.):
         self.maxk = maxk
         self.maxl = maxl
         self.nbasis = self.maxk*self.maxl**2
-        self.cap_lim = cap_lim
+        self.cap_lim = cap_lim*np.pi/180.
 #         if C is not None:
 #             self.C = C
 #         if dC is not None:
@@ -494,13 +497,18 @@ class EvalParam(Model):
             
             self.time = h5file.get_node('/UnixTime')[:]
 
-            self.maxk = h5file.get_node('/FitParams/kmax').read()
-            self.maxl = h5file.get_node('/FitParams/lmax').read()
-            self.cap_lim = h5file.get_node('/FitParams/cap_lim').read()
+#             self.maxk = h5file.get_node('/FitParams/kmax').read()
+#             self.maxl = h5file.get_node('/FitParams/lmax').read()
+#             self.cap_lim = h5file.get_node('/FitParams/cap_lim').read()
+            maxk = h5file.get_node('/FitParams/kmax').read()
+            maxl = h5file.get_node('/FitParams/lmax').read()
+            cap_lim = h5file.get_node('/FitParams/cap_lim').read()
             self.cent_point = h5file.get_node('/FitParams/center_point')[:]
             self.hull_v = h5file.get_node('/FitParams/hull_verticies')[:]
 
-        self.nbasis = self.maxk*self.maxl**2
+        super().__init__(maxk,maxl,cap_lim)
+
+#         self.nbasis = self.maxk*self.maxl**2
                 
                 
                 
@@ -647,35 +655,6 @@ class EvalParam(Model):
 #         return vec_rot
 
 
-    def compute_hull(self,R0):
-        """
-        Compute the convex hull that contains the original data.  This is nessisary to check if points requested from the
-         model are within the vaild range of where the data constrains the model.
-
-        Parameters:
-            R0: [ndarray(3,npoints)]
-                array of input points in geocentric coordinates
-                R = [[r coordinates (m)],[theta coordinates (rad)],[phi coordinates (rad)]]
-                if input points are expressed as a list of r,t,p points, eg. points = [[r1,t1,p1],[r2,t2,p2],...], R = np.array(points).T
-        Returns:
-            hv: [ndarray(3,nverticies)]
-                array of the coordinates of the verticies of the convex hull
-        Notes:
-            - hv is also saved as an attribute of the class
-        """
-
-        x, y, z = cc.spherical_to_cartesian(R0[0],R0[1],R0[2])
-        R_cart = np.array([x,y,z]).T
-
-        chull = ConvexHull(R_cart)
-        vert = R_cart[chull.vertices]
-
-        r, t, p = cc.cartesian_to_spherical(vert.T[0],vert.T[1],vert.T[2])
-        self.hv = np.array([r,t,p]).T
-
-        return self.hv
-
-
     def check_hull(self,R0):
         """
         Check if the input points R0 are within the convex hull of the original data.
@@ -771,7 +750,7 @@ class EvalParam(Model):
 
 
 # TODO: inherent Model not EvalParam?
-class Fit(EvalParam):
+class Fit(Model):
     """
     This class performs the least-squares fit of the data to the 3D analytic model to find the coefficient vector for the model.
     It also handles calculating regularization matricies and parameters if nessisary.
@@ -833,9 +812,72 @@ class Fit(EvalParam):
     """
 
     # def __init__(self,date=None,radar=None,code=None,param=None):
-    def __init__(self,param=None):
-        self.radar = radar
-        self.param = param
+#     def __init__(self,param=None):
+    def __init__(self,config_file):
+#         self.radar = radar
+#         self.param = param
+        
+        self.read_config(config_file)
+        
+    def read_config(self, config_file):
+        # read config file
+        config = configparser.ConfigParser()
+        config.read(config_file)
+
+#         KMAX = 4
+# LMAX = 6
+# CAPLIMIT = 6.*np.pi/180.
+
+# # required for fit
+# REGULARIZATION_METHOD = ['0thorder']
+# REGULARIZATION_PARAMETER_METHOD = 'chi2'
+# PARAMETER_NAME = 'Electron Density'
+# MAX_Z_INT = np.inf
+# PARAMETER_RANGE = [0, 3e11]
+# PARAMETER_UNITS = 'm$^-3$'
+
+# # year = 2016
+# # month = 12
+# # day = 27
+# # hour = 22
+# # minute = 0
+
+# # date = dt.datetime(year,month,day)
+
+# FILENAME = '/home/jovyan/mount/data/RISR-N/20171119.001_lp_1min-fitcal.h5'
+# OUTFILENAME = 'test_out.h5'
+# radar = 'RISR-N'
+# code = 'lp'
+
+#         self.datafile = config.get('DEFAULT', 'DATAFILE')
+#         self.outfilename = config.get('DEFAULT', 'OUTFILENAME')
+#         self.chirp = eval(config.get('DEFAULT', 'CHIRP'))
+#         self.covar = eval(config.get('DEFAULT', 'COVAR'))
+#         self.altlim = eval(config.get('DEFAULT', 'ALTLIM'))
+#         self.nelim = eval(config.get('DEFAULT', 'NELIM'))
+        
+        maxk = eval(config.get('DEFAULT','MAXK'))
+        maxl = eval(config.get('DEFAULT','MAXL'))
+        cap_lim = eval(config.get('DEFAULT','CAP_LIM'))
+        
+        super().__init__(maxk,maxl,cap_lim)
+        
+        # move these things to a proper initialization function
+#         self.maxl = LMAX
+#         self.maxk = KMAX
+#         self.cap_lim = CAPLIMIT
+#         self.nbasis = self.maxk*self.maxl**2
+        self.regularization_list = eval(config.get('DEFAULT','REGULARIZATION_LIST'))
+        self.reg_method = eval(config.get('DEFAULT','REGULARIZATION_METHOD'))
+#         self.reg_scale_factor = np.nan
+        self.max_z_int = eval(config.get('DEFAULT','MAX_Z_INT'))
+                               
+        self.filename = eval(config.get('DEFAULT','FILENAME'))
+        self.outputfilename = eval(config.get('DEFAULT','OUTPUTFILENAME'))
+                               
+        param = eval(config.get('DEFAULT', 'PARAM'))
+        self.param = AMISR_param(param)
+
 
 
     def get_ns(self,q):
@@ -1565,6 +1607,35 @@ class Fit(EvalParam):
 
         return reg_param
 
+    def compute_hull(self,R0):
+        """
+        Compute the convex hull that contains the original data.  This is nessisary to check if points requested from the
+         model are within the vaild range of where the data constrains the model.
+
+        Parameters:
+            R0: [ndarray(3,npoints)]
+                array of input points in geocentric coordinates
+                R = [[r coordinates (m)],[theta coordinates (rad)],[phi coordinates (rad)]]
+                if input points are expressed as a list of r,t,p points, eg. points = [[r1,t1,p1],[r2,t2,p2],...], R = np.array(points).T
+        Returns:
+            hv: [ndarray(3,nverticies)]
+                array of the coordinates of the verticies of the convex hull
+        Notes:
+            - hv is also saved as an attribute of the class
+        """
+
+        x, y, z = cc.spherical_to_cartesian(R0[0],R0[1],R0[2])
+        R_cart = np.array([x,y,z]).T
+
+        chull = ConvexHull(R_cart)
+        vert = R_cart[chull.vertices]
+
+        r, t, p = cc.cartesian_to_spherical(vert.T[0],vert.T[1],vert.T[2])
+        self.hv = np.array([r,t,p]).T
+
+        return self.hv
+
+
 
 
     def eval_C(self,A,b,W,reg_matrices,reg_params,calccov=False):
@@ -1622,14 +1693,14 @@ class Fit(EvalParam):
         Covariance = []
         chi_sq = []
 
-        # move these things to a proper initialization function
-        self.maxl = LMAX
-        self.maxk = KMAX
-        self.cap_lim = CAPLIMIT
-        self.nbasis = self.maxk*self.maxl**2
-        self.regularization_list = REGULARIZATION_METHOD
-        self.reg_method = REGULARIZATION_PARAMETER_METHOD
-        self.reg_scale_factor = np.nan
+#         # move these things to a proper initialization function
+#         self.maxl = LMAX
+#         self.maxk = KMAX
+#         self.cap_lim = CAPLIMIT
+#         self.nbasis = self.maxk*self.maxl**2
+#         self.regularization_list = REGULARIZATION_METHOD
+#         self.reg_method = REGULARIZATION_PARAMETER_METHOD
+#         self.reg_scale_factor = np.nan
 
 
         print('Evaluating Regularization matricies.  This may take a few minutes.')
@@ -1640,7 +1711,7 @@ class Fit(EvalParam):
             reg_matrices['Psi'] = self.eval_psi()
  
         # read data from AMISR fitted file
-        utime, R00, value, error = self.param.get_data(FILENAME)
+        utime, R00, value, error = self.param.get_data(self.filename)
         
         # if a starttime and endtime are given, rewrite utime, value, and error arrays so
         #   they only contain records between those two times
@@ -2385,8 +2456,9 @@ def main():
     st = dt.datetime(2017,11,21,18,40)
     et = dt.datetime(2017,11,21,18,50)
     
-    param = AMISR_param('dens')
-    dayfit = Fit(param=param)
+#     param = AMISR_param('dens')
+#     dayfit = Fit(param=param)
+    dayfit = Fit('config.ini')
 #     dayfit.fit()
     dayfit.validate(st, et, 350.)
 #     dayfit.saveh5()
