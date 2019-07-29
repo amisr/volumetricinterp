@@ -248,9 +248,10 @@ class Model(object):
 #         if self.C is None:
 #             print 'WARNING: C not specified in Model!'
 
+        R, _ = self.transform_coord(R)
+
         out = {}
         A = self.eval_basis(R)
-#         parameter = np.reshape(np.dot(A,self.C),np.shape(A)[0])
         parameter = np.reshape(np.dot(A,C),np.shape(A)[0])
         out['param'] = parameter
 
@@ -338,6 +339,87 @@ class Model(object):
         return Kvm
 
 
+    def transform_coord(self,R0):
+        """
+        Transform from spherical coordinates to something friendlier for calculating the basis fit.
+        This involves a rotation so that the data is centered around the north pole and a trasformation
+         of the radial component such that z = 100*(r/RE-1).
+
+        Parameters:
+            R0: [ndarray(3,npoints)]
+                array of input points in geocentric coordinates
+                R = [[r coordinates (m)],[theta coordinates (rad)],[phi coordinates (rad)]]
+                if input points are expressed as a list of r,t,p points, eg. points = [[r1,t1,p1],[r2,t2,p2],...], R = np.array(points).T
+        Returns:
+            R_trans: [ndarray(3,npoints)]
+                array of input points transformed into model coordinates
+                R_trans = [[z coordinates],[theta coordinates (rad)],[phi coordinates (rad)]]
+            cp: [ndarray(2)]
+                center point of the input coordinates R0
+        Notes:
+
+        """
+
+
+        try:
+            phi0 = self.cp[1]
+            theta0 = self.cp[0]
+        except:
+            phi0 = np.average(R0[2])
+            theta0 = -1*np.average(R0[1])
+            self.cp = [theta0,phi0]
+
+
+        k = np.array([np.cos(phi0+np.pi/2.),np.sin(phi0+np.pi/2.),0.])
+
+        x, y, z = cc.spherical_to_cartesian(R0[0],R0[1],R0[2])
+        Rp = np.array([x,y,z])
+        Rr = np.array([R*np.cos(theta0)+np.cross(k,R)*np.sin(theta0)+k*np.dot(k,R)*(1-np.cos(theta0)) for R in Rp.T]).T
+        r, t, p = cc.cartesian_to_spherical(Rr[0],Rr[1],Rr[2])
+        R_trans = np.array([100*(r/RE-1),t,p])
+
+        return R_trans, self.cp
+
+
+
+    def inverse_transform(self,R0,vec):
+        """
+        Inverse transformation to recover the correct vector components at their original position after
+         calling eval_model().  This is primarially nessisary to get the gradients correct.
+
+        Parameters:
+            R0: [ndarray(3,npoints)]
+                array of points in model coordinates corresponding to the location of each vector in vec
+            vec: [ndarray(npoints,3)]
+                array of vectors in model coordinates
+        Returns:
+            vec_rot: [ndarray(npoints,3)]
+                array of vectors rotated back to original geocenteric coordinates
+        """
+
+        phi0 = self.cp[1]
+        theta0 = -1.*self.cp[0]
+
+        k = np.array([np.cos(phi0+np.pi/2.),np.sin(phi0+np.pi/2.),0.])
+
+        rx, ry, rz = cc.spherical_to_cartesian((R0[0]/100.+1.)*RE,R0[1],R0[2])
+        Rc = np.array([rx,ry,rz])
+        vx, vy, vz = cc.vector_spherical_to_cartesian(vec.T[0],vec.T[1],vec.T[2],(R0[0]/100.+1.)*RE,R0[1],R0[2])
+        vc = np.array([vx,vy,vz])
+
+        rr = np.array([R*np.cos(theta0)+np.cross(k,R)*np.sin(theta0)+k*np.dot(k,R)*(1-np.cos(theta0)) for R in Rc.T]).T
+        vr = np.array([v*np.cos(theta0)+np.cross(k,v)*np.sin(theta0)+k*np.dot(k,v)*(1-np.cos(theta0)) for v in vc.T]).T
+        vr, vt, vp = cc.vector_cartesian_to_spherical(vr[0],vr[1],vr[2],rr[0],rr[1],rr[2])
+
+        vec_rot = np.array([vr,vt,vp]).T
+
+        return vec_rot
+
+    
+    
+    
+    
+    
 
 class EvalParam(Model):
     """
@@ -488,81 +570,81 @@ class EvalParam(Model):
 
     
     
-    def transform_coord(self,R0):
-        """
-        Transform from spherical coordinates to something friendlier for calculating the basis fit.
-        This involves a rotation so that the data is centered around the north pole and a trasformation
-         of the radial component such that z = 100*(r/RE-1).
+#     def transform_coord(self,R0):
+#         """
+#         Transform from spherical coordinates to something friendlier for calculating the basis fit.
+#         This involves a rotation so that the data is centered around the north pole and a trasformation
+#          of the radial component such that z = 100*(r/RE-1).
 
-        Parameters:
-            R0: [ndarray(3,npoints)]
-                array of input points in geocentric coordinates
-                R = [[r coordinates (m)],[theta coordinates (rad)],[phi coordinates (rad)]]
-                if input points are expressed as a list of r,t,p points, eg. points = [[r1,t1,p1],[r2,t2,p2],...], R = np.array(points).T
-        Returns:
-            R_trans: [ndarray(3,npoints)]
-                array of input points transformed into model coordinates
-                R_trans = [[z coordinates],[theta coordinates (rad)],[phi coordinates (rad)]]
-            cp: [ndarray(2)]
-                center point of the input coordinates R0
-        Notes:
+#         Parameters:
+#             R0: [ndarray(3,npoints)]
+#                 array of input points in geocentric coordinates
+#                 R = [[r coordinates (m)],[theta coordinates (rad)],[phi coordinates (rad)]]
+#                 if input points are expressed as a list of r,t,p points, eg. points = [[r1,t1,p1],[r2,t2,p2],...], R = np.array(points).T
+#         Returns:
+#             R_trans: [ndarray(3,npoints)]
+#                 array of input points transformed into model coordinates
+#                 R_trans = [[z coordinates],[theta coordinates (rad)],[phi coordinates (rad)]]
+#             cp: [ndarray(2)]
+#                 center point of the input coordinates R0
+#         Notes:
 
-        """
-
-
-        try:
-            phi0 = self.cp[1]
-            theta0 = self.cp[0]
-        except:
-            phi0 = np.average(R0[2])
-            theta0 = -1*np.average(R0[1])
-            self.cp = [theta0,phi0]
+#         """
 
 
-        k = np.array([np.cos(phi0+np.pi/2.),np.sin(phi0+np.pi/2.),0.])
-
-        x, y, z = cc.spherical_to_cartesian(R0[0],R0[1],R0[2])
-        Rp = np.array([x,y,z])
-        Rr = np.array([R*np.cos(theta0)+np.cross(k,R)*np.sin(theta0)+k*np.dot(k,R)*(1-np.cos(theta0)) for R in Rp.T]).T
-        r, t, p = cc.cartesian_to_spherical(Rr[0],Rr[1],Rr[2])
-        R_trans = np.array([100*(r/RE-1),t,p])
-
-        return R_trans, self.cp
+#         try:
+#             phi0 = self.cp[1]
+#             theta0 = self.cp[0]
+#         except:
+#             phi0 = np.average(R0[2])
+#             theta0 = -1*np.average(R0[1])
+#             self.cp = [theta0,phi0]
 
 
+#         k = np.array([np.cos(phi0+np.pi/2.),np.sin(phi0+np.pi/2.),0.])
 
-    def inverse_transform(self,R0,vec):
-        """
-        Inverse transformation to recover the correct vector components at their original position after
-         calling eval_model().  This is primarially nessisary to get the gradients correct.
+#         x, y, z = cc.spherical_to_cartesian(R0[0],R0[1],R0[2])
+#         Rp = np.array([x,y,z])
+#         Rr = np.array([R*np.cos(theta0)+np.cross(k,R)*np.sin(theta0)+k*np.dot(k,R)*(1-np.cos(theta0)) for R in Rp.T]).T
+#         r, t, p = cc.cartesian_to_spherical(Rr[0],Rr[1],Rr[2])
+#         R_trans = np.array([100*(r/RE-1),t,p])
 
-        Parameters:
-            R0: [ndarray(3,npoints)]
-                array of points in model coordinates corresponding to the location of each vector in vec
-            vec: [ndarray(npoints,3)]
-                array of vectors in model coordinates
-        Returns:
-            vec_rot: [ndarray(npoints,3)]
-                array of vectors rotated back to original geocenteric coordinates
-        """
+#         return R_trans, self.cp
 
-        phi0 = self.cp[1]
-        theta0 = -1.*self.cp[0]
 
-        k = np.array([np.cos(phi0+np.pi/2.),np.sin(phi0+np.pi/2.),0.])
 
-        rx, ry, rz = cc.spherical_to_cartesian((R0[0]/100.+1.)*RE,R0[1],R0[2])
-        Rc = np.array([rx,ry,rz])
-        vx, vy, vz = cc.vector_spherical_to_cartesian(vec.T[0],vec.T[1],vec.T[2],(R0[0]/100.+1.)*RE,R0[1],R0[2])
-        vc = np.array([vx,vy,vz])
+#     def inverse_transform(self,R0,vec):
+#         """
+#         Inverse transformation to recover the correct vector components at their original position after
+#          calling eval_model().  This is primarially nessisary to get the gradients correct.
 
-        rr = np.array([R*np.cos(theta0)+np.cross(k,R)*np.sin(theta0)+k*np.dot(k,R)*(1-np.cos(theta0)) for R in Rc.T]).T
-        vr = np.array([v*np.cos(theta0)+np.cross(k,v)*np.sin(theta0)+k*np.dot(k,v)*(1-np.cos(theta0)) for v in vc.T]).T
-        vr, vt, vp = cc.vector_cartesian_to_spherical(vr[0],vr[1],vr[2],rr[0],rr[1],rr[2])
+#         Parameters:
+#             R0: [ndarray(3,npoints)]
+#                 array of points in model coordinates corresponding to the location of each vector in vec
+#             vec: [ndarray(npoints,3)]
+#                 array of vectors in model coordinates
+#         Returns:
+#             vec_rot: [ndarray(npoints,3)]
+#                 array of vectors rotated back to original geocenteric coordinates
+#         """
 
-        vec_rot = np.array([vr,vt,vp]).T
+#         phi0 = self.cp[1]
+#         theta0 = -1.*self.cp[0]
 
-        return vec_rot
+#         k = np.array([np.cos(phi0+np.pi/2.),np.sin(phi0+np.pi/2.),0.])
+
+#         rx, ry, rz = cc.spherical_to_cartesian((R0[0]/100.+1.)*RE,R0[1],R0[2])
+#         Rc = np.array([rx,ry,rz])
+#         vx, vy, vz = cc.vector_spherical_to_cartesian(vec.T[0],vec.T[1],vec.T[2],(R0[0]/100.+1.)*RE,R0[1],R0[2])
+#         vc = np.array([vx,vy,vz])
+
+#         rr = np.array([R*np.cos(theta0)+np.cross(k,R)*np.sin(theta0)+k*np.dot(k,R)*(1-np.cos(theta0)) for R in Rc.T]).T
+#         vr = np.array([v*np.cos(theta0)+np.cross(k,v)*np.sin(theta0)+k*np.dot(k,v)*(1-np.cos(theta0)) for v in vc.T]).T
+#         vr, vt, vp = cc.vector_cartesian_to_spherical(vr[0],vr[1],vr[2],rr[0],rr[1],rr[2])
+
+#         vec_rot = np.array([vr,vt,vp]).T
+
+#         return vec_rot
 
 
     def compute_hull(self,R0):
@@ -1239,7 +1321,10 @@ class Fit(EvalParam):
 
         # Set nu
         scale_factors = [0.6,0.7,0.8,0.9,1.0]
+#         scale_factors = [1.0]
         N = len(b)
+#         N = A.shape[0]-A.shape[1]
+#         print(N,A.shape)
         bracket = False
 
         for sf in scale_factors:
@@ -1555,7 +1640,7 @@ class Fit(EvalParam):
             reg_matrices['Psi'] = self.eval_psi()
  
         # read data from AMISR fitted file
-        utime, R0, value, error = self.param.get_data(FILENAME)
+        utime, R00, value, error = self.param.get_data(FILENAME)
         
         # if a starttime and endtime are given, rewrite utime, value, and error arrays so
         #   they only contain records between those two times
@@ -1566,10 +1651,10 @@ class Fit(EvalParam):
             error = error[idx]
  
         # Find convex hull of original data set
-        verticies = self.compute_hull(R0)
+        verticies = self.compute_hull(R00)
         
         # Transform coordinates
-        R0, cp = self.transform_coord(R0)
+        R0, cp = self.transform_coord(R00)
 
         # loop over every record and calculate the coefficients
         for ut, ne0, er0 in zip(utime, value, error):
@@ -1625,7 +1710,7 @@ class Fit(EvalParam):
         self.chi_sq = np.array(chi_sq)
         self.cent_point = cp
         self.hull_v = verticies
-        self.raw_coords = R0
+        self.raw_coords = R00
         self.raw_data = value
         self.raw_error = error
         self.raw_filename = FILENAME
@@ -1670,140 +1755,185 @@ class Fit(EvalParam):
 
 
 
-    def validate(self,time0,altitude,longitude):
-        # TODO: Is this function even nessisary?  Alternatively, figure out a way to test just a part of a file for fine-tuning fit parameters quickly
+    def validate(self,starttime, endtime, altitude, altlim=30.):
         """
-        Creates a basic plot of the volumetric reconstruction next to the original measurment points to confirm that the reconstruction is reasonable.
+        Creates a basic map of the volumetric reconstruction with the original data at a particular altitude slice to confirm that the reconstruction is reasonable.
+        This function is designed to fit and plot only a small subset of an experiment (between starttime and endtime) so that it can be used to fine-tune parameters
+        without waiting for an entire experiment to be processed
 
         Parameters:
-            time0: [datetime]
-                time at which the plots should be created
+            starttime: [datetime]
+                start of interval to validate
+            endtime: [datetime]
+                end of interval to validate
             altitude: [float]
-                altitude of the latitude-longitude slice
-            longitude: [float]
-                longitude of the latitude-altitude slice
+                altitude of the slice
+            altlim: [float]
+                points that fall +/- altlim from altitude will be plotted on top of reconstructed contours as scatter
         """
 
-        self.datetime = time0
+        import matplotlib.pyplot as plt
+        import matplotlib.gridspec as gridspec
+        import cartopy.crs as ccrs
 
-        targtime = (self.datetime-dt.datetime(1970,1,1)).total_seconds()
+        self.fit(starttime=starttime, endtime=endtime)
+        
+        lat0, lon0, alt0 = cc.spherical_to_geodetic(self.raw_coords[0], self.raw_coords[1], self.raw_coords[2])
 
-        try:
-            utime = np.array([[(t[0]-dt.datetime.utcfromtimestamp(0)).total_seconds(),(t[1]-dt.datetime.utcfromtimestamp(0)).total_seconds()] for t in self.time])
-            rec = np.where((targtime >= utime[:,0]) & (targtime < utime[:,1]))[0]
-            rec = rec[0]
+        # set input coordinates
+        latn, lonn = np.meshgrid(np.linspace(74., 80., 50), np.linspace(260., 285., 50))
+        altn = np.full(latn.shape, altitude)
+        r, t, p = cc.geodetic_to_spherical(latn, lonn, altn)
+        R0n = np.array([r,t,p])
 
-            self.t = self.time[rec][0]
-            self.C = self.Coeffs[rec]
-            self.dC = self.Covariance[rec]
-            self.hv = self.hull_v[rec].T
-            self.cp = self.cent_point[rec]
-            self.rR = self.raw_coords[rec].T
-            self.rd = self.raw_data[rec]
-            self.re = self.raw_error[rec]
+        Rshape = R0n.shape
+        R0 = R0n.reshape(Rshape[0], -1)
 
+        map_proj = ccrs.LambertConformal(central_latitude=74, central_longitude=-94)
+        denslim = [0., 3.e11]
+    
+        for i, (rd, C) in enumerate(zip(self.raw_data, self.Coeffs)):
+            out = self.eval_model(R0,C)
+            ne = out['param'].reshape(tuple(list(Rshape)[1:]))
 
-        except AttributeError:
-            self.loadh5(raw=True)
+            # create plot
+            fig = plt.figure(figsize=(10,10))
+            ax = fig.add_axes([0.02, 0.1, 0.9, 0.8], projection=map_proj)
+            ax.coastlines()
+            ax.gridlines()
+            ax.set_extent([250.,285.,69.,80.])
 
+            # plot density contours from RISR
+            c = ax.contourf(lonn, latn, ne, np.linspace(denslim[0],denslim[1],31), extend='both', transform=ccrs.PlateCarree())
+            ax.scatter(lon0[np.abs(alt0-altitude)<altlim], lat0[np.abs(alt0-altitude)<altlim], c=rd[np.abs(alt0-altitude)<altlim], vmin=denslim[0], vmax=denslim[1], transform=ccrs.Geodetic())
 
-        lat, lon, alt = cc.spherical_to_geodetic(self.hv.T[0],self.hv.T[1],self.hv.T[2])
-        latrange = np.linspace(min(lat),max(lat),50)
-        lonrange = np.linspace(min(lon),max(lon),50)
-        altrange = np.linspace(min(alt),max(alt),50)
+            cax = fig.add_axes([0.91,0.1,0.03,0.8])
+            cbar = plt.colorbar(c, cax=cax)
+            cbar.set_label(r'Electron Density (m$^{-3}$)')
 
-        cent_lat = (min(lat)+max(lat))/2.
-        cent_lon = (min(lon)+max(lon))/2.
-        height = (max(lat)-min(lat))*np.pi/180.*(RE+altitude)
-        width = (max(lon)-min(lon))*np.pi/180.*(RE+altitude)*np.cos(cent_lat*np.pi/180.)
+            plt.savefig('temp{}.png'.format(i))
+            plt.close(fig)
 
+#         self.datetime = time0
 
-        lat, lon = np.meshgrid(latrange,lonrange)
-        alt = np.ones(np.shape(lat))*altitude
-        r,t,p = cc.geodetic_to_spherical(lat.ravel(),lon.ravel(),alt.ravel())
-        R0 = np.array([r,t,p])
+#         targtime = (self.datetime-dt.datetime(1970,1,1)).total_seconds()
 
-        dens, grad = self.getparam(R0)
-        dens = dens.reshape(lat.shape)
-        grad = grad.reshape(lat.shape+(4,))
+#         try:
+#             utime = np.array([[(t[0]-dt.datetime.utcfromtimestamp(0)).total_seconds(),(t[1]-dt.datetime.utcfromtimestamp(0)).total_seconds()] for t in self.time])
+#             rec = np.where((targtime >= utime[:,0]) & (targtime < utime[:,1]))[0]
+#             rec = rec[0]
 
-        dens[dens<0] = np.nan
-
-
-        lat2, alt2 = np.meshgrid(latrange,altrange)
-        lon2 = np.ones(np.shape(lat2))*longitude
-        r,t,p = cc.geodetic_to_spherical(lat2.ravel(),lon2.ravel(),alt2.ravel())
-        R02 = np.array([r,t,p])
-
-        dens2, grad2 = self.getparam(R02)
-        dens2 = dens2.reshape(lat2.shape)
-        grad2 = grad2.reshape(lat2.shape+(4,))
-        dens2[dens2<0] = np.nan
-
-        lat3d, lon3d, alt3d = cc.spherical_to_geodetic(self.rR.T[0],self.rR.T[1],self.rR.T[2])
-        dens3d = self.rd
-        err3d = self.re
-
-#         print lat3d
-
-        raw_lat = lat3d[np.where(abs(alt3d-altitude)<10.)]
-        raw_lon = lon3d[np.where(abs(alt3d-altitude)<10.)]
-        raw_dens = dens3d[np.where(abs(alt3d-altitude)<10.)]
-
-        longitude = longitude+360.
-        raw_lat2 = lat3d[np.where(abs(lon3d-longitude)<1.)]
-        raw_alt2 = alt3d[np.where(abs(lon3d-longitude)<1.)]
-        raw_dens2 = dens3d[np.where(abs(lon3d-longitude)<1.)]
+#             self.t = self.time[rec][0]
+#             self.C = self.Coeffs[rec]
+#             self.dC = self.Covariance[rec]
+#             self.hv = self.hull_v[rec].T
+#             self.cp = self.cent_point[rec]
+#             self.rR = self.raw_coords[rec].T
+#             self.rd = self.raw_data[rec]
+#             self.re = self.raw_error[rec]
 
 
-
-        # maximum and minimum ne for color scale (in units of 10^11 m^-3)
-        minv = self.param.vrange[0]
-        maxv = self.param.vrange[1]
+#         except AttributeError:
+#             self.loadh5(raw=True)
 
 
-        fig = plt.figure(figsize=(15,5))
-        cmap = plt.cm.get_cmap('viridis')
+#         lat, lon, alt = cc.spherical_to_geodetic(self.hv.T[0],self.hv.T[1],self.hv.T[2])
+#         latrange = np.linspace(min(lat),max(lat),50)
+#         lonrange = np.linspace(min(lon),max(lon),50)
+#         altrange = np.linspace(min(alt),max(alt),50)
 
-        # ax = fig.add_subplot(131,projection='3d')
-        # ax.scatter(lat3d,lon3d,alt3d,c=dens3d, s=2.e11/err3d, vmin=minne, vmax=maxne, depthshade=False)
-        ax = fig.add_subplot(131,projection='3d')
-        # m = Basemap(projection='aeqd',lat_0=cent_lat,lon_0=cent_lon,llcrnrlon=250,llcrnrlat=65,urcrnrlon=330,urcrnrlat=80,resolution='l')
-        m = Basemap(projection='aeqd',lat_0=cent_lat,lon_0=cent_lon,width=width,height=height,resolution='l')
-        ax.add_collection3d(m.drawcoastlines())
-        # ax.add_collection3d(m.scatter(lon3d,lat3d,alt3d,c=dens3d, s=sum(self.param.vrange)/err3d, latlon=True, vmin=minv, vmax=maxv,cmap=cmap))
-        ax.add_collection3d(m.scatter(lon3d,lat3d,alt3d,c=dens3d, s=(dens3d/err3d)**2, latlon=True, vmin=minv, vmax=maxv,cmap=cmap))
-        ax.set_title(self.t.strftime('%Y-%m-%d %H:%M:%S'))
+#         cent_lat = (min(lat)+max(lat))/2.
+#         cent_lon = (min(lon)+max(lon))/2.
+#         height = (max(lat)-min(lat))*np.pi/180.*(RE+altitude)
+#         width = (max(lon)-min(lon))*np.pi/180.*(RE+altitude)*np.cos(cent_lat*np.pi/180.)
 
 
-        ax = fig.add_subplot(132)
-        # m = Basemap(projection='aeqd',lat_0=cent_lat,lon_0=cent_lon,llcrnrlon=250,llcrnrlat=65,urcrnrlon=310,urcrnrlat=81,resolution='l')
-        m = Basemap(projection='aeqd',lat_0=cent_lat,lon_0=cent_lon,width=width,height=height,resolution='l')
-        f = m.contourf(lon,lat,dens,levels=np.linspace(minv,maxv,100),extend='both',latlon=True,zorder=2,cmap=cmap)
-        m.scatter(raw_lon,raw_lat,c=raw_dens,vmin=minv,vmax=maxv,s=25,latlon=True,zorder=3,cmap=cmap)
-        # m.scatter(raw_lon,raw_lat,c=raw_dens,vmin=minv,vmax=maxv,s=2*(dens3d/err3d)**2,latlon=True,zorder=3,cmap=cmap)
-        u, v, x, y = m.rotate_vector(grad[:,:,2],-1*grad[:,:,1],lon,lat,returnxy=True)
-        m.quiver(x,y,u,v,zorder=3)
-        m.plot(lon2[0],lat2[0],latlon=True,zorder=4,color='white')
-        m.drawcoastlines()
-        m.drawmapboundary(fill_color='white')
-        m.drawparallels([60.,70.,80.,90.])
-        m.drawmeridians(np.arange(-180.,180.,30))
+#         lat, lon = np.meshgrid(latrange,lonrange)
+#         alt = np.ones(np.shape(lat))*altitude
+#         r,t,p = cc.geodetic_to_spherical(lat.ravel(),lon.ravel(),alt.ravel())
+#         R0 = np.array([r,t,p])
 
-        ax = fig.add_subplot(133)
-        f = ax.contourf(lat2,alt2,dens2,levels=np.linspace(minv,maxv,100),extend='both',zorder=2,cmap=cmap)
-        ax.scatter(raw_lat2,raw_alt2,c=raw_dens2,vmin=minv,vmax=maxv,s=25,zorder=3,cmap=cmap)
-        # ax.scatter(raw_lat2,raw_alt2,c=raw_dens2,vmin=minv,vmax=maxv,s=2*(dens3d/err3d)**2,zorder=3,cmap=cmap)
-        ax.quiver(lat2,alt2,-1*grad2[:,:,1],grad2[:,:,0])
-        ax.plot(lat[0],alt[0],zorder=4,color='white')
+#         dens, grad = self.getparam(R0)
+#         dens = dens.reshape(lat.shape)
+#         grad = grad.reshape(lat.shape+(4,))
+
+#         dens[dens<0] = np.nan
 
 
-        fig.subplots_adjust(left=0.02,right=0.9)
-        axc = fig.add_axes([0.91,0.15,0.02,0.7])
-        cbar = fig.colorbar(f,cax=axc)
-        cbar.set_label(self.param.name+' ('+self.param.units+')')
+#         lat2, alt2 = np.meshgrid(latrange,altrange)
+#         lon2 = np.ones(np.shape(lat2))*longitude
+#         r,t,p = cc.geodetic_to_spherical(lat2.ravel(),lon2.ravel(),alt2.ravel())
+#         R02 = np.array([r,t,p])
 
-        plt.show()
+#         dens2, grad2 = self.getparam(R02)
+#         dens2 = dens2.reshape(lat2.shape)
+#         grad2 = grad2.reshape(lat2.shape+(4,))
+#         dens2[dens2<0] = np.nan
+
+#         lat3d, lon3d, alt3d = cc.spherical_to_geodetic(self.rR.T[0],self.rR.T[1],self.rR.T[2])
+#         dens3d = self.rd
+#         err3d = self.re
+
+# #         print lat3d
+
+#         raw_lat = lat3d[np.where(abs(alt3d-altitude)<10.)]
+#         raw_lon = lon3d[np.where(abs(alt3d-altitude)<10.)]
+#         raw_dens = dens3d[np.where(abs(alt3d-altitude)<10.)]
+
+#         longitude = longitude+360.
+#         raw_lat2 = lat3d[np.where(abs(lon3d-longitude)<1.)]
+#         raw_alt2 = alt3d[np.where(abs(lon3d-longitude)<1.)]
+#         raw_dens2 = dens3d[np.where(abs(lon3d-longitude)<1.)]
+
+
+
+#         # maximum and minimum ne for color scale (in units of 10^11 m^-3)
+#         minv = self.param.vrange[0]
+#         maxv = self.param.vrange[1]
+
+
+#         fig = plt.figure(figsize=(15,5))
+#         cmap = plt.cm.get_cmap('viridis')
+
+#         # ax = fig.add_subplot(131,projection='3d')
+#         # ax.scatter(lat3d,lon3d,alt3d,c=dens3d, s=2.e11/err3d, vmin=minne, vmax=maxne, depthshade=False)
+#         ax = fig.add_subplot(131,projection='3d')
+#         # m = Basemap(projection='aeqd',lat_0=cent_lat,lon_0=cent_lon,llcrnrlon=250,llcrnrlat=65,urcrnrlon=330,urcrnrlat=80,resolution='l')
+#         m = Basemap(projection='aeqd',lat_0=cent_lat,lon_0=cent_lon,width=width,height=height,resolution='l')
+#         ax.add_collection3d(m.drawcoastlines())
+#         # ax.add_collection3d(m.scatter(lon3d,lat3d,alt3d,c=dens3d, s=sum(self.param.vrange)/err3d, latlon=True, vmin=minv, vmax=maxv,cmap=cmap))
+#         ax.add_collection3d(m.scatter(lon3d,lat3d,alt3d,c=dens3d, s=(dens3d/err3d)**2, latlon=True, vmin=minv, vmax=maxv,cmap=cmap))
+#         ax.set_title(self.t.strftime('%Y-%m-%d %H:%M:%S'))
+
+
+#         ax = fig.add_subplot(132)
+#         # m = Basemap(projection='aeqd',lat_0=cent_lat,lon_0=cent_lon,llcrnrlon=250,llcrnrlat=65,urcrnrlon=310,urcrnrlat=81,resolution='l')
+#         m = Basemap(projection='aeqd',lat_0=cent_lat,lon_0=cent_lon,width=width,height=height,resolution='l')
+#         f = m.contourf(lon,lat,dens,levels=np.linspace(minv,maxv,100),extend='both',latlon=True,zorder=2,cmap=cmap)
+#         m.scatter(raw_lon,raw_lat,c=raw_dens,vmin=minv,vmax=maxv,s=25,latlon=True,zorder=3,cmap=cmap)
+#         # m.scatter(raw_lon,raw_lat,c=raw_dens,vmin=minv,vmax=maxv,s=2*(dens3d/err3d)**2,latlon=True,zorder=3,cmap=cmap)
+#         u, v, x, y = m.rotate_vector(grad[:,:,2],-1*grad[:,:,1],lon,lat,returnxy=True)
+#         m.quiver(x,y,u,v,zorder=3)
+#         m.plot(lon2[0],lat2[0],latlon=True,zorder=4,color='white')
+#         m.drawcoastlines()
+#         m.drawmapboundary(fill_color='white')
+#         m.drawparallels([60.,70.,80.,90.])
+#         m.drawmeridians(np.arange(-180.,180.,30))
+
+#         ax = fig.add_subplot(133)
+#         f = ax.contourf(lat2,alt2,dens2,levels=np.linspace(minv,maxv,100),extend='both',zorder=2,cmap=cmap)
+#         ax.scatter(raw_lat2,raw_alt2,c=raw_dens2,vmin=minv,vmax=maxv,s=25,zorder=3,cmap=cmap)
+#         # ax.scatter(raw_lat2,raw_alt2,c=raw_dens2,vmin=minv,vmax=maxv,s=2*(dens3d/err3d)**2,zorder=3,cmap=cmap)
+#         ax.quiver(lat2,alt2,-1*grad2[:,:,1],grad2[:,:,0])
+#         ax.plot(lat[0],alt[0],zorder=4,color='white')
+
+
+#         fig.subplots_adjust(left=0.02,right=0.9)
+#         axc = fig.add_axes([0.91,0.15,0.02,0.7])
+#         cbar = fig.colorbar(f,cax=axc)
+#         cbar.set_label(self.param.name+' ('+self.param.units+')')
+
+#         plt.show()
 
 
     def maps(self):
@@ -2257,7 +2387,8 @@ def main():
     
     param = AMISR_param('dens')
     dayfit = Fit(param=param)
-    dayfit.fit(starttime=st, endtime=et)
+#     dayfit.fit()
+    dayfit.validate(st, et, 350.)
 #     dayfit.saveh5()
 
 #     dayfit.loadh5(filename='test_out.h5')
