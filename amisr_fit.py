@@ -1524,7 +1524,7 @@ class Fit(EvalParam):
             return C
 
 
-    def fit(self):
+    def fit(self, starttime=None, endtime=None):
         """
         Perform fit on every record in file.
 
@@ -1537,7 +1537,7 @@ class Fit(EvalParam):
         Covariance = []
         chi_sq = []
 
-        
+        # move these things to a proper initialization function
         self.maxl = LMAX
         self.maxk = KMAX
         self.cap_lim = CAPLIMIT
@@ -1556,6 +1556,14 @@ class Fit(EvalParam):
  
         # read data from AMISR fitted file
         utime, R0, value, error = self.param.get_data(FILENAME)
+        
+        # if a starttime and endtime are given, rewrite utime, value, and error arrays so
+        #   they only contain records between those two times
+        if starttime and endtime:
+            idx = np.argwhere((utime[:,0]>=(starttime-dt.datetime.utcfromtimestamp(0)).total_seconds()) & (utime[:,1]<=(endtime-dt.datetime.utcfromtimestamp(0)).total_seconds())).flatten()
+            utime = utime[idx,:]
+            value = value[idx]
+            error = error[idx]
  
         # Find convex hull of original data set
         verticies = self.compute_hull(R0)
@@ -2084,6 +2092,7 @@ class AMISR_param(object):
         self.p0 = p
 
 
+    # This function can be a dictionary
     def zeroth_order(self,x,*args):
         """
         Evaluate the zeroth order function for any parameter
@@ -2135,6 +2144,7 @@ class AMISR_param(object):
             A, B, H, C = args
         return A*np.arcsinh((x-B)/H)+C
 
+    # remove - never use this
     def quickplot(self,filename,index):
         """
         Create a scatter plot of the raw data values from a particular record in a file
@@ -2242,10 +2252,13 @@ def find_index(filename,time):
 	
 def main():
 
+    st = dt.datetime(2017,11,21,18,40)
+    et = dt.datetime(2017,11,21,18,50)
+    
     param = AMISR_param('dens')
     dayfit = Fit(param=param)
-    dayfit.fit()
-    dayfit.saveh5()
+    dayfit.fit(starttime=st, endtime=et)
+#     dayfit.saveh5()
 
 #     dayfit.loadh5(filename='test_out.h5')
 #     dayfit.maps()
