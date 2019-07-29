@@ -6,16 +6,16 @@ import scipy.integrate
 import scipy.special as sp
 from scipy.spatial import ConvexHull
 import datetime as dt
-import coord_convert as cc
+import coord_convert as cc   # TODO: change to using pymap3d
 import tables
 
 import matplotlib.pyplot as plt
 import matplotlib
-from mpl_toolkits.basemap import Basemap
+from mpl_toolkits.basemap import Basemap    # TODO: change to using cartopy
 from mpl_toolkits.mplot3d import Axes3D
 
 
-
+# TODO: put all this in a config file
 RE = 6371.2*1000.           # Earth Radius (m)	
 
 # if fitting, these parameters should be pulled from a config file
@@ -46,10 +46,13 @@ code = 'lp'
 
 
 
+# TODO: put seperate classes in different files
 
 
 
+# TODO: include coordinate transformations in model?
 class Model(object):
+    # TODO: update docstring
     """
     This class defines the 3D analytic model that is used to describe density and temperature within an AMISR FoV.
 
@@ -402,6 +405,7 @@ class EvalParam(Model):
                 default is False (raw data will NOT be loaded)
         """
 
+        # TODO: clean up how these are initialized
         with tables.open_file(filename, 'r') as h5file:
             self.Coeffs = h5file.get_node('/Coeffs/C')[:]
             self.Covariance = h5file.get_node('/Coeffs/dC')[:]
@@ -684,7 +688,7 @@ class EvalParam(Model):
 
 
 
-
+# TODO: inherent Model not EvalParam?
 class Fit(EvalParam):
     """
     This class performs the least-squares fit of the data to the 3D analytic model to find the coefficient vector for the model.
@@ -1621,6 +1625,7 @@ class Fit(EvalParam):
 
 
     def saveh5(self):
+        # TODO: compress arrays to reduce coefficient file size
         """
         Saves coefficients to a hdf5 file
 
@@ -1658,6 +1663,7 @@ class Fit(EvalParam):
 
 
     def validate(self,time0,altitude,longitude):
+        # TODO: Is this function even nessisary?  Alternatively, figure out a way to test just a part of a file for fine-tuning fit parameters quickly
         """
         Creates a basic plot of the volumetric reconstruction next to the original measurment points to confirm that the reconstruction is reasonable.
 
@@ -2164,7 +2170,7 @@ class AMISR_param(object):
 	
 
 
-
+# TODO: Remove this?
 def find_index(filename,time):
     """
     Find the index of a file that is closest to the given time
