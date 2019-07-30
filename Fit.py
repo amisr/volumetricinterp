@@ -1004,7 +1004,7 @@ class Fit(Model):
             None
         """
         
-        with tables.open_file(OUTFILENAME, 'w') as h5out:
+        with tables.open_file(self.outputfilename, 'w') as h5out:
 
             cgroup = h5out.create_group('/','Coeffs','Dataset')
             fgroup = h5out.create_group('/','FitParams','Dataset')
@@ -1014,18 +1014,18 @@ class Fit(Model):
 
             h5out.create_array(cgroup, 'C', self.Coeffs)
             h5out.create_array(cgroup, 'dC', self.Covariance)
-
+            
             h5out.create_array(fgroup, 'kmax', self.maxk)
             h5out.create_array(fgroup, 'lmax', self.maxl)
             h5out.create_array(fgroup, 'cap_lim', self.cap_lim)
             h5out.create_array(fgroup, 'reglist', self.regularization_list)
-            h5out.create_array(fgroup, 'regmethod', self.reg_method)
-            h5out.create_array(fgroup, 'regscalefac', self.reg_scale_factor)
+            h5out.create_array(fgroup, 'regmethod', self.reg_method.encode('utf-8'))
+#             h5out.create_array(fgroup, 'regscalefac', self.reg_scale_factor)
             h5out.create_array(fgroup, 'chi2', self.chi_sq)
             h5out.create_array(fgroup, 'center_point', self.cent_point)
             h5out.create_array(fgroup, 'hull_verticies', self.hull_v)
 
-            h5out.create_array(dgroup, 'filename', self.raw_filename)
+            h5out.create_array(dgroup, 'filename', self.raw_filename.encode('utf-8'))
             h5out.create_array(dgroup, 'coordinates', self.raw_coords)
             h5out.create_array(dgroup, 'data', self.raw_data)
             h5out.create_array(dgroup, 'error', self.raw_error)
