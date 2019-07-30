@@ -3,16 +3,16 @@
 
 import numpy as np
 import datetime as dt
-from amisr_fit import EvalParam
+from EvalParam import EvalParam
 import coord_convert as cc
 
 # set input coordinates
 lat, lon = np.meshgrid(np.linspace(75., 80.,10), np.linspace(260., 280.,10))
-alt = np.full(lat.shape, 300.)
+alt = np.full(lat.shape, 350.)
 r, t, p = cc.geodetic_to_spherical(lat, lon, alt)
 R0 = np.array([r,t,p])
 
-time = dt.datetime(2017,11,19,0,5,3)
+time = dt.datetime(2017,11,21,18,45)
 
 param = EvalParam('test_out.h5')
 dens = param.getparam(time,R0)

@@ -1,6 +1,5 @@
 # run_volumetric_interp.py
 
-import datetime as dt
 from Fit import Fit
 
 config_file_help = """Calculate coefficients for volmetric interpolation
@@ -49,12 +48,8 @@ def main():
    
     args = vars(parser.parse_args())
 
-    st = dt.datetime(2017,11,21,18,40)
-    et = dt.datetime(2017,11,21,18,50)
-    
     fit = Fit(args['config_file'])
-    fit.fit(st, et)
-#     fit.fit()
+    fit.fit()
     fit.saveh5()
 
 	

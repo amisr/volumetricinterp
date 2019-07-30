@@ -1017,7 +1017,7 @@ class Fit(Model):
             
             h5out.create_array(fgroup, 'kmax', self.maxk)
             h5out.create_array(fgroup, 'lmax', self.maxl)
-            h5out.create_array(fgroup, 'cap_lim', self.cap_lim)
+            h5out.create_array(fgroup, 'cap_lim', self.cap_lim*180./np.pi)
             h5out.create_array(fgroup, 'reglist', self.regularization_list)
             h5out.create_array(fgroup, 'regmethod', self.reg_method.encode('utf-8'))
 #             h5out.create_array(fgroup, 'regscalefac', self.reg_scale_factor)

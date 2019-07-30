@@ -1,6 +1,7 @@
 # EvalParam.py
 
 import numpy as np
+import datetime as dt
 import tables
 from scipy.spatial import ConvexHull
 import coord_convert as cc
@@ -125,14 +126,11 @@ class EvalParam(Model):
 
         Rshape = R0.shape
         R0 = R0.reshape(Rshape[0], -1)
-
         check = self.check_hull(R0)
-        R, __ = self.transform_coord(R0)
 
-#         C = self.Coeffs[self.find_index(time)]
         C, dC = self.get_C(time)
 
-        out = self.eval_model(R,C)
+        out = self.eval_model(R0,C)
         parameter = out['param']
         parameter[~check] = np.nan
         P = parameter
