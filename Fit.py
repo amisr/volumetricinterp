@@ -1059,7 +1059,7 @@ class Fit(Model):
         lat0, lon0, alt0 = cc.spherical_to_geodetic(self.raw_coords[0], self.raw_coords[1], self.raw_coords[2])
 
         # set input coordinates
-        latn, lonn = np.meshgrid(np.linspace(74., 80., 50), np.linspace(260., 285., 50))
+        latn, lonn = np.meshgrid(np.linspace(min(lat0), max(lat0), 50), np.linspace(min(lon0), max(lon0), 50))
         altn = np.full(latn.shape, altitude)
         r, t, p = cc.geodetic_to_spherical(latn, lonn, altn)
         R0n = np.array([r,t,p])
@@ -1067,7 +1067,7 @@ class Fit(Model):
         Rshape = R0n.shape
         R0 = R0n.reshape(Rshape[0], -1)
 
-        map_proj = ccrs.LambertConformal(central_latitude=74, central_longitude=-94)
+        map_proj = ccrs.LambertConformal(central_latitude=np.mean(lat0), central_longitude=np.mean(lon0))
         denslim = [0., 3.e11]
     
         for i, (rd, C) in enumerate(zip(self.raw_data, self.Coeffs)):
@@ -1079,7 +1079,7 @@ class Fit(Model):
             ax = fig.add_axes([0.02, 0.1, 0.9, 0.8], projection=map_proj)
             ax.coastlines()
             ax.gridlines()
-            ax.set_extent([250.,285.,69.,80.])
+            ax.set_extent([min(lon0),max(lon0),min(lat0),max(lat0)])
 
             # plot density contours from RISR
             c = ax.contourf(lonn, latn, ne, np.linspace(denslim[0],denslim[1],31), extend='both', transform=ccrs.PlateCarree())
@@ -1089,7 +1089,7 @@ class Fit(Model):
             cbar = plt.colorbar(c, cax=cax)
             cbar.set_label(r'Electron Density (m$^{-3}$)')
 
-            plt.savefig('temp{}.png'.format(i))
+            plt.savefig('temp{:02d}.png'.format(i))
             plt.close(fig)
 
 #         self.datetime = time0
