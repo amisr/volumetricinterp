@@ -244,7 +244,8 @@ class EvalParam(Model):
                 if input points are expressed as a list of r,t,p points, eg. points = [[r1,t1,p1],[r2,t2,p2],...], R = np.array(points).T
 
         """
-        x, y, z = cc.spherical_to_cartesian(self.hull_v[:,0],self.hull_v[:,1],self.hull_v[:,2])
+        # x, y, z = cc.spherical_to_cartesian(self.hull_v[:,0],self.hull_v[:,1],self.hull_v[:,2])
+        x, y, z = cc.geodetic_to_cartesian(self.hull_v[:,0],self.hull_v[:,1],self.hull_v[:,2])
         vert_cart = np.array([x,y,z]).T
         
         hull = ConvexHull(vert_cart)
@@ -252,7 +253,8 @@ class EvalParam(Model):
         for R in R0.T:
             value = False
 
-            x, y, z = cc.spherical_to_cartesian(R[0],R[1],R[2])
+            # x, y, z = cc.spherical_to_cartesian(R[0],R[1],R[2])
+            x, y, z = cc.geodetic_to_cartesian(R[0],R[1],R[2])
 
             pnt = np.array([[x,y,z]])
             pnts = np.append(vert_cart,pnt,axis=0)

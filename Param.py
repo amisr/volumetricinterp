@@ -236,8 +236,9 @@ class AMISR_param(object):
         
         
         # Convert input coordinates to geocentric-spherical
-        r, t, p = cc.geodetic_to_spherical(latitude,longitude,altitude/1000.)
-        R0 = np.array([r,t,p])
+        # r, t, p = cc.geodetic_to_spherical(latitude,longitude,altitude/1000.)
+        # R0 = np.array([r,t,p])
+        R0 = np.array([latitude, longitude, altitude/1000.])
 
         return utime, R0, value, error
     

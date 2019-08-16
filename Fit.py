@@ -841,14 +841,14 @@ class Fit(Model):
             - hv is also saved as an attribute of the class
         """
 
-        x, y, z = cc.spherical_to_cartesian(R0[0],R0[1],R0[2])
+        x, y, z = cc.geodetic_to_cartesian(R0[0],R0[1],R0[2])
         R_cart = np.array([x,y,z]).T
 
         chull = ConvexHull(R_cart)
         vert = R_cart[chull.vertices]
 
-        r, t, p = cc.cartesian_to_spherical(vert.T[0],vert.T[1],vert.T[2])
-        self.hv = np.array([r,t,p]).T
+        lat, lon, alt = cc.cartesian_to_geodetic(vert.T[0],vert.T[1],vert.T[2])
+        self.hv = np.array([lat, lon, alt]).T
 
         return self.hv
 
@@ -1056,13 +1056,12 @@ class Fit(Model):
 
         self.fit(starttime=starttime, endtime=endtime)
         
-        lat0, lon0, alt0 = cc.spherical_to_geodetic(self.raw_coords[0], self.raw_coords[1], self.raw_coords[2])
+        lat0, lon0, alt0 = self.raw_coords
 
         # set input coordinates
         latn, lonn = np.meshgrid(np.linspace(min(lat0), max(lat0), 50), np.linspace(min(lon0), max(lon0), 50))
         altn = np.full(latn.shape, altitude)
-        r, t, p = cc.geodetic_to_spherical(latn, lonn, altn)
-        R0n = np.array([r,t,p])
+        R0n = np.array([latn, lonn, altn])
 
         Rshape = R0n.shape
         R0 = R0n.reshape(Rshape[0], -1)

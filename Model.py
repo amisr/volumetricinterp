@@ -315,6 +315,8 @@ class Model(object):
 
         """
 
+        r, t, p = cc.geodetic_to_spherical(R0[0], R0[1], R0[2])
+        R0 = np.array([r, t, p])
 
         try:
             phi0 = self.cp[1]

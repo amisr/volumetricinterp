@@ -8,8 +8,8 @@ from Fit import Fit
 
 def main():
 
-    st = dt.datetime(2017,11,21,18,30)
-    et = dt.datetime(2017,11,21,19,0)
+    st = dt.datetime(2017,11,21,18,40)
+    et = dt.datetime(2017,11,21,18,50)
     
     dayfit = Fit('config.ini')
     dayfit.validate(st, et, 350.)
