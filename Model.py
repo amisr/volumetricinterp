@@ -2,6 +2,7 @@
 
 import numpy as np
 import scipy.special as sp
+import scipy.integrate
 import coord_convert as cc
 
 RE = 6371.2*1000.           # Earth Radius (m)	
@@ -159,7 +160,79 @@ class Model(object):
         # print np.shape(np.array(Ag).T)
         return np.array(Ag).T
 
-        
+    
+    def eval_omega(self):
+        omega = np.zeros((self.nbasis,self.nbasis))
+        for ni in range(self.nbasis):
+            for nj in range(ni, self.nbasis):
+                omega[ni,nj]
+                O = self.omega_ij(ni, nj)
+                omega[ni,nj] = O
+                omega[nj,ni] = O
+        return omega
+
+    def omega_ij(self,ni,nj):
+        ki, li, mi = self.basis_numbers(ni)
+        kj, lj, mj = self.basis_numbers(nj)
+        vi = self.nu(ni)
+        vj = self.nu(nj)
+
+        z_int = lambda z: np.exp(-1*z)*sp.eval_laguerre(ki,z)*sp.eval_laguerre(kj,z)/z**2
+        t_int = lambda t: 1/np.sin(t)**3*(-1*vi*(vi*np.cos(t)**2+vi+1)*sp.lpmv(mi,vi,np.cos(t))+vi*(vi+mi)*np.cos(t)*sp.lpmv(mi,vi-1,np.cos(t))+vi*(vi-mi+1)*np.cos(t)*sp.lpmv(mi,vi+1,np.cos(t)))*(-1*vj*(vj*np.cos(t)**2+vj+1)*sp.lpmv(mj,vj,np.cos(t))+vj*(vj+mj)*np.cos(t)*sp.lpmv(mj,vj-1,np.cos(t))+vj*(vj-mj+1)*np.cos(t)*sp.lpmv(mj,vj+1,np.cos(t)))
+        p_int = lambda p: self.Az(vi,mi,p)*self.Az(vj,mj,p)
+
+        Iz = scipy.integrate.quad(z_int, 0., self.max_z_int)
+        It = scipy.integrate.quad(t_int, 0., self.cap_lim)
+        Ip = scipy.integrate.quad(p_int, 0., 2*np.pi)
+        O = Iz[0]*It[0]*Ip[0]
+        return O
+
+
+    def eval_psi(self):
+        psi = np.zeros((self.nbasis,self.nbasis))
+        for ni in range(self.nbasis):
+            for nj in range(ni, self.nbasis):
+                P = self.psi_ij(ni, nj)
+                psi[ni,nj] = P
+                psi[nj,ni] = P
+        return psi
+
+    def psi_ij(self, ni, nj):
+        ki, li, mi = self.basis_numbers(ni)
+        kj, lj, mj = self.basis_numbers(nj)
+        vi = self.nu(ni)
+        vj = self.nu(nj)
+
+        z_int = lambda z: np.exp(-1*z)*sp.eval_laguerre(ki,z)*sp.eval_laguerre(kj,z)*z**2
+        t_int = lambda t: sp.lpmv(mi,vi,np.cos(t))*sp.lpmv(mj,vj,np.cos(t))*np.sin(t)
+        p_int = lambda p: self.Az(vi,mi,p)*self.Az(vj,mj,p)
+
+        Iz = scipy.integrate.quad(z_int, 0., self.max_z_int)
+        It = scipy.integrate.quad(t_int, 0., self.cap_lim)
+        Ip = scipy.integrate.quad(p_int, 0., 2*np.pi)
+
+        P = Iz[0]*It[0]*Ip[0]
+        return P
+
+    def eval_tau(self, reg_func):
+        tau = np.zeros((self.nbasis,1))
+        for ni in range(self.nbasis):
+            tau[ni] = self.tau_i(ni, reg_func)
+        return tau
+
+    def tau_i(self, n, reg_func):
+        k, l, m = self.basis_numbers(n)
+        v = self.nu(n)
+
+        z_int = lambda z: np.exp(-0.5*z)*sp.eval_laguerre(k,z)*reg_func(z)*z**2
+        t_int = lambda t: sp.lpmv(m,v,np.cos(t))*np.sin(t)
+        p_int = lambda p: self.Az(v,m,p)
+
+        Iz = scipy.integrate.quad(z_int, 0., self.max_z_int)
+        It = scipy.integrate.quad(t_int, 0., self.cap_lim)
+        Ip = scipy.integrate.quad(p_int, 0., 2*np.pi)
+        T = Iz[0]*It[0]*Ip[0]
+        return T
 
 
     def eval_model(self,R,C,calcgrad=False,calcerr=False,verbose=False):
