@@ -4,6 +4,7 @@ import numpy as np
 import scipy.special as sp
 import scipy.integrate
 import coord_convert as cc
+from scipy.spatial import ConvexHull, Delaunay
 
 RE = 6371.2*1000.           # Earth Radius (m)	
 
@@ -51,15 +52,6 @@ class Model(object):
 
         # basis_centers = np.array([[77., -95.5, 300.], [76., -86., 300.], [78.,-88.5, 300.], [77., -95.5, 350.], [76., -86., 350.], [78.,-88.5, 350.], [77., -95.5, 400.], [76., -86., 400.], [78.,-88.5, 400.]])
 
-        centers_lat = np.linspace(75., 80., 5)
-        centers_lon = np.linspace(-97., -80., 5)
-        centers_alt = np.arange(300., 550., 50.)
-        lat, lon, alt = np.meshgrid(centers_lat, centers_lon, centers_alt)
-
-        x, y, z = cc.geodetic_to_cartesian(lat.flatten(), lon.flatten(), alt.flatten())
-        self.centers = np.array([x, y, z]).T
-
-        self.nbasis = self.centers.shape[0]
 
         # self.maxk = maxk
         # self.maxl = maxl
@@ -104,6 +96,27 @@ class Model(object):
     #     k, l, m = self.basis_numbers(n)
     #     v = (2*l+0.5)*np.pi/(2*self.cap_lim)-0.5
     #     return v
+
+    def set_model(self, R):
+
+        X, Y, Z = cc.geodetic_to_cartesian(R[0], R[1], R[2])
+        hull = Delaunay(np.array([X,Y,Z]).T)
+
+        # form a regular grid
+        centers_lat = np.linspace(75., 80., 5)
+        centers_lon = np.linspace(-97., -80., 5)
+        centers_alt = np.arange(300., 550., 50.)
+        lat, lon, alt = np.meshgrid(centers_lat, centers_lon, centers_alt)
+
+        # convert to cartesian
+        x, y, z = cc.geodetic_to_cartesian(lat.flatten(), lon.flatten(), alt.flatten())
+        centers = np.array([x,y,z])
+
+        # identify points within the convex hull of the original data set
+        centers = centers[:,hull.find_simplex(centers.T)>=0]
+
+        self.centers = centers.T
+        self.nbasis = self.centers.shape[0]
 
 
     def eval_basis(self,R):

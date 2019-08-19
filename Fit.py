@@ -525,6 +525,8 @@ class Fit(Model):
  
         # Find convex hull of original data set
         verticies = self.compute_hull(R00)
+
+        self.set_model(R00)
         
         # Transform coordinates
         R0 = self.transform_coord(R00)
@@ -684,8 +686,8 @@ class Fit(Model):
             ax.set_extent([min(lon0),max(lon0),min(lat0),max(lat0)])
 
             # plot density contours from RISR
-            # c = ax.contourf(lonn, latn, ne, np.linspace(denslim[0],denslim[1],31), extend='both', transform=ccrs.PlateCarree())
-            c = ax.contourf(lonn, latn, ne, transform=ccrs.PlateCarree())
+            c = ax.contourf(lonn, latn, ne, np.linspace(denslim[0],denslim[1],31), extend='both', transform=ccrs.PlateCarree())
+            # c = ax.contourf(lonn, latn, ne, transform=ccrs.PlateCarree())
             ax.scatter(lon0[np.abs(alt0-altitude)<altlim], lat0[np.abs(alt0-altitude)<altlim], c=rd[np.abs(alt0-altitude)<altlim], vmin=denslim[0], vmax=denslim[1], transform=ccrs.Geodetic())
 
             cax = fig.add_axes([0.91,0.1,0.03,0.8])
