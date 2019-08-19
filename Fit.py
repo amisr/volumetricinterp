@@ -10,7 +10,7 @@ from scipy.spatial import ConvexHull
 import tables
 import coord_convert as cc
 
-from Model import Model
+from Model_RBF import Model
 from Param import AMISR_param
 
 class Fit(Model):
@@ -77,11 +77,12 @@ class Fit(Model):
         config = configparser.ConfigParser()
         config.read(config_file)
 
-        maxk = eval(config.get('DEFAULT','MAXK'))
-        maxl = eval(config.get('DEFAULT','MAXL'))
-        cap_lim = eval(config.get('DEFAULT','CAP_LIM'))
+        # maxk = eval(config.get('DEFAULT','MAXK'))
+        # maxl = eval(config.get('DEFAULT','MAXL'))
+        # cap_lim = eval(config.get('DEFAULT','CAP_LIM'))
         
-        super().__init__(maxk,maxl,cap_lim)
+        # super().__init__(maxk,maxl,cap_lim)
+        super().__init__()
         
         self.regularization_list = eval(config.get('DEFAULT','REGULARIZATION_LIST'))
         self.reg_method = eval(config.get('DEFAULT','REGULARIZATION_METHOD'))
@@ -526,7 +527,7 @@ class Fit(Model):
         verticies = self.compute_hull(R00)
         
         # Transform coordinates
-        R0, cp = self.transform_coord(R00)
+        R0 = self.transform_coord(R00)
 
         # loop over every record and calculate the coefficients
         for ut, ne0, er0 in zip(utime, value, error):
@@ -588,7 +589,7 @@ class Fit(Model):
         self.Coeffs = np.array(Coeffs)
         self.Covariance = np.array(Covariance)
         self.chi_sq = np.array(chi_sq)
-        self.cent_point = cp
+        # self.cent_point = cp
         self.hull_v = verticies
         self.raw_coords = R00
         self.raw_data = value
@@ -683,7 +684,8 @@ class Fit(Model):
             ax.set_extent([min(lon0),max(lon0),min(lat0),max(lat0)])
 
             # plot density contours from RISR
-            c = ax.contourf(lonn, latn, ne, np.linspace(denslim[0],denslim[1],31), extend='both', transform=ccrs.PlateCarree())
+            # c = ax.contourf(lonn, latn, ne, np.linspace(denslim[0],denslim[1],31), extend='both', transform=ccrs.PlateCarree())
+            c = ax.contourf(lonn, latn, ne, transform=ccrs.PlateCarree())
             ax.scatter(lon0[np.abs(alt0-altitude)<altlim], lat0[np.abs(alt0-altitude)<altlim], c=rd[np.abs(alt0-altitude)<altlim], vmin=denslim[0], vmax=denslim[1], transform=ccrs.Geodetic())
 
             cax = fig.add_axes([0.91,0.1,0.03,0.8])
