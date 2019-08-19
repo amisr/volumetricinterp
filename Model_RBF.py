@@ -100,22 +100,23 @@ class Model(object):
     def set_model(self, R):
 
         X, Y, Z = cc.geodetic_to_cartesian(R[0], R[1], R[2])
-        hull = Delaunay(np.array([X,Y,Z]).T)
+        # hull = Delaunay(np.array([X,Y,Z]).T)
 
-        # form a regular grid
-        centers_lat = np.linspace(min(R[0]), max(R[0]), 8)
-        centers_lon = np.linspace(min(R[1]), max(R[1]), 8)
-        centers_alt = np.linspace(min(R[2]), max(R[2]), 8)
-        lat, lon, alt = np.meshgrid(centers_lat, centers_lon, centers_alt)
+        # # form a regular grid
+        # centers_lat = np.linspace(min(R[0]), max(R[0]), 8)
+        # centers_lon = np.linspace(min(R[1]), max(R[1]), 8)
+        # centers_alt = np.linspace(min(R[2]), max(R[2]), 8)
+        # lat, lon, alt = np.meshgrid(centers_lat, centers_lon, centers_alt)
 
-        # convert to cartesian
-        x, y, z = cc.geodetic_to_cartesian(lat.flatten(), lon.flatten(), alt.flatten())
-        centers = np.array([x,y,z])
+        # # convert to cartesian
+        # x, y, z = cc.geodetic_to_cartesian(lat.flatten(), lon.flatten(), alt.flatten())
+        # centers = np.array([x,y,z])
 
-        # identify points within the convex hull of the original data set
-        centers = centers[:,hull.find_simplex(centers.T)>=0]
+        # # identify points within the convex hull of the original data set
+        # centers = centers[:,hull.find_simplex(centers.T)>=0]
 
-        self.centers = centers.T
+        # self.centers = centers.T
+        self.centers = np.array([X,Y,Z]).T
         self.nbasis = self.centers.shape[0]
 
 
