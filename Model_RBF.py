@@ -48,7 +48,7 @@ class Model(object):
     """
 
     def __init__(self):
-        self.eps = 80000.0
+        self.eps = 100000.0
 
         # basis_centers = np.array([[77., -95.5, 300.], [76., -86., 300.], [78.,-88.5, 300.], [77., -95.5, 350.], [76., -86., 350.], [78.,-88.5, 350.], [77., -95.5, 400.], [76., -86., 400.], [78.,-88.5, 400.]])
 
@@ -103,9 +103,9 @@ class Model(object):
         hull = Delaunay(np.array([X,Y,Z]).T)
 
         # form a regular grid
-        centers_lat = np.linspace(75., 80., 5)
-        centers_lon = np.linspace(-97., -80., 5)
-        centers_alt = np.arange(300., 550., 50.)
+        centers_lat = np.linspace(min(R[0]), max(R[0]), 8)
+        centers_lon = np.linspace(min(R[1]), max(R[1]), 8)
+        centers_alt = np.linspace(min(R[2]), max(R[2]), 8)
         lat, lon, alt = np.meshgrid(centers_lat, centers_lon, centers_alt)
 
         # convert to cartesian
