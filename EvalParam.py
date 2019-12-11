@@ -56,6 +56,15 @@ class EvalParam(Model):
         self.timeinterp = timeinterp
 
         self.loadh5(filename=coeff_filename)
+
+        config_file = io.StringIO(self.config_file_text)
+
+        config = configparser.ConfigParser()
+        config.read(config_file)
+        model_name = eval(config.get('MODEL', 'MODEL'))
+
+        m = importlib.import_module(model_name)
+        self.model = m.Model(config_file)
 #         try:
 #             self.loadh5()
 #         except Exception as e:
@@ -89,7 +98,9 @@ class EvalParam(Model):
             self.cent_point = h5file.get_node('/FitParams/center_point')[:]
             self.hull_v = h5file.get_node('/FitParams/hull_verticies')[:]
 
-        super().__init__(maxk,maxl,cap_lim)
+            self.config_file_text = h5file.get_node('/ConfigFile/Contents').read()
+
+        # super().__init__(maxk,maxl,cap_lim)
 
 
 

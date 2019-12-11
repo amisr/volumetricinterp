@@ -3,6 +3,7 @@
 import numpy as np
 import scipy.special as sp
 import scipy.integrate
+import configparser
 import coord_convert as cc  # replace all instances of this with pymap3d
 
 RE = 6371.2*1000.           # Earth Radius (m)
@@ -47,15 +48,33 @@ class Model(object):
         - All methods EXCEPT for eval_model() can be called without specifying C or dC.
     """
 
-    def __init__(self,maxk,maxl,cap_lim=6.):
-        self.maxk = maxk
-        self.maxl = maxl
-        self.nbasis = self.maxk*self.maxl**2
-        self.cap_lim = cap_lim*np.pi/180.
+    # def __init__(self,maxk,maxl,cap_lim=6.):
+    #     self.maxk = maxk
+    #     self.maxl = maxl
+    #     self.nbasis = self.maxk*self.maxl**2
+    #     self.cap_lim = cap_lim*np.pi/180.
 #         if C is not None:
 #             self.C = C
 #         if dC is not None:
 #             self.dC = dC
+
+    def __init__(self, config_file):
+        self.read_config(config_file)
+        self.nbasis = self.maxk*self.maxl**2
+        self.cap_lim = self.cap_lim*np.pi/180.
+
+
+    def read_config(self, config_file):
+        # read config file
+        config = configparser.ConfigParser()
+        config.read(config_file)
+
+        self.maxk = eval(config.get('MODEL','MAXK'))
+        self.maxl = eval(config.get('MODEL','MAXL'))
+        self.cap_lim = eval(config.get('MODEL','CAP_LIM'))
+
+        # super().__init__(maxk,maxl,cap_lim)
+
 
     def basis_numbers(self,n):
         """
@@ -236,6 +255,9 @@ class Model(object):
         return T
 
 
+    # maybe not nessisary?  Move to EvalParam
+    # evaluation of linear models should always be y = A*C, so this should be straightforward
+    # logit of what should/should not be calculated can be handled by EvalParam
     def eval_model(self,R,C,calcgrad=False,calcerr=False,verbose=False):
         """
         Evaluate the density and gradients at the points in R given the coefficients C.

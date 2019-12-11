@@ -8,14 +8,16 @@ import scipy.integrate
 import scipy.special as sp
 from scipy.spatial import ConvexHull
 import tables
+import importlib
 import coord_convert as cc
+import os
 
-from Model import Model
+# from Model import Model
 # from Param import AMISR_param
 
 # make Model an attribute of class instead of inhereted
 # this  will let which model to use be defined in the config file
-class Fit(Model):
+class Fit(object):
     """
     This class performs the least-squares fit of the data to the 3D analytic model to find the coefficient vector for the model.
     It also handles calculating regularization matricies and parameters if nessisary.
@@ -72,28 +74,36 @@ class Fit(Model):
 
     def __init__(self,config_file):
 
-        self.read_config(config_file)
+        self.configfile = config_file
+        self.read_config(self.configfile)
+
+        # print(self.model_name)
+        # from self.model_name import Model
+        m = importlib.import_module(self.model_name)
+        self.model = m.Model(self.configfile)
 
     def read_config(self, config_file):
         # read config file
         config = configparser.ConfigParser()
         config.read(config_file)
 
-        maxk = eval(config.get('DEFAULT','MAXK'))
-        maxl = eval(config.get('DEFAULT','MAXL'))
-        cap_lim = eval(config.get('DEFAULT','CAP_LIM'))
-
-        super().__init__(maxk,maxl,cap_lim)
-
         self.regularization_list = eval(config.get('DEFAULT','REGULARIZATION_LIST'))
         self.reg_method = eval(config.get('DEFAULT','REGULARIZATION_METHOD'))
-        self.max_z_int = float(config.get('DEFAULT','MAX_Z_INT'))
+        # self.max_z_int = float(config.get('DEFAULT','MAX_Z_INT'))
 
         self.filename = eval(config.get('DEFAULT','FILENAME'))
         self.outputfilename = eval(config.get('DEFAULT','OUTPUTFILENAME'))
 
         self.param = eval(config.get('DEFAULT', 'PARAM'))
         # self.param = AMISR_param(param)
+
+        self.model_name = eval(config.get('MODEL', 'MODEL'))
+
+        # maxk = eval(config.get('DEFAULT','MAXK'))
+        # maxl = eval(config.get('DEFAULT','MAXL'))
+        # cap_lim = eval(config.get('DEFAULT','CAP_LIM'))
+        #
+        # super().__init__(maxk,maxl,cap_lim)
 
 
 
@@ -531,7 +541,7 @@ class Fit(Model):
         verticies = self.compute_hull(R00)
 
         # Transform coordinates
-        R0, cp = self.transform_coord(R00)
+        R0, cp = self.model.transform_coord(R00)
 
         # loop over every record and calculate the coefficients
         # if modeling time variation, this loop will change?
@@ -558,15 +568,15 @@ class Fit(Model):
             # if regularization matricies are NaN, skip this record - fit can not be computed
             if np.any([np.any(np.isnan(v.flatten())) for k, v in reg_matrices.items()]):
                 # NaNs in C, dC, c2
-                Coeffs.append(np.full(self.nbasis, np.nan))
-                Covariance.append(np.full((self.nbasis,self.nbasis), np.nan))
+                Coeffs.append(np.full(self.model.nbasis, np.nan))
+                Covariance.append(np.full((self.model.nbasis,self.model.nbasis), np.nan))
                 chi_sq.append(np.nan)
                 continue
 
             # define matricies
             W = np.array(er0**(-2))[:,None]
             b = ne0[:,None]
-            A = self.eval_basis(R)
+            A = self.model.eval_basis(R)
 
             # calculate regularization parameters
             reg_params = self.find_reg_param(A,b,W,reg_matrices,method=self.reg_method)
@@ -574,8 +584,8 @@ class Fit(Model):
             # if regularization parameters are NaN, skip this record - fit can not be computed
             if np.any(np.isnan([v for k, v in reg_params.items()])):
                 # NaNs in C, dC, c2
-                Coeffs.append(np.full(self.nbasis, np.nan))
-                Covariance.append(np.full((self.nbasis,self.nbasis), np.nan))
+                Coeffs.append(np.full(self.model.nbasis, np.nan))
+                Covariance.append(np.full((self.model.nbasis,self.model.nbasis), np.nan))
                 chi_sq.append(np.nan)
                 continue
 
@@ -719,9 +729,13 @@ class Fit(Model):
             h5out.create_array(cgroup, 'C', self.Coeffs)
             h5out.create_array(cgroup, 'dC', self.Covariance)
 
-            h5out.create_array(fgroup, 'kmax', self.maxk)
-            h5out.create_array(fgroup, 'lmax', self.maxl)
-            h5out.create_array(fgroup, 'cap_lim', self.cap_lim*180./np.pi)
+            # these are model specific parameters that are loaded from config file
+            # just save the config file?
+            # somehow automatically initialize Model in Evaluate?
+            # h5out.create_array(fgroup, 'kmax', self.maxk)
+            # h5out.create_array(fgroup, 'lmax', self.maxl)
+            # h5out.create_array(fgroup, 'cap_lim', self.cap_lim*180./np.pi)
+
             h5out.create_array(fgroup, 'reglist', self.regularization_list)
             h5out.create_array(fgroup, 'regmethod', self.reg_method.encode('utf-8'))
 #             h5out.create_array(fgroup, 'regscalefac', self.reg_scale_factor)
@@ -733,6 +747,17 @@ class Fit(Model):
             h5out.create_array(dgroup, 'coordinates', self.raw_coords)
             h5out.create_array(dgroup, 'data', self.raw_data)
             h5out.create_array(dgroup, 'error', self.raw_error)
+
+            # config file
+            Path = os.path.dirname(os.path.abspath(self.configfile))
+            Name = os.path.basename(self.configfile)
+            with open(self.configfile, 'r') as f:
+                Contents = ''.join(f.readlines())
+
+            h5out.create_group('/', 'ConfigFile')
+            h5out.create_array('/ConfigFile', 'Name', Name.encode('utf-8'))
+            h5out.create_array('/ConfigFile', 'Path', Path.encode('utf-8'))
+            h5out.create_array('/ConfigFile', 'Contents', Contents.encode('utf-8'))
 
 
 
