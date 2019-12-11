@@ -1,5 +1,9 @@
 # Param.py
 
+## REMOVE THE PARAM class
+# move data reading/filtering functions to Fit
+# move regularization methods to Model
+
 import numpy as np
 import scipy
 import tables
@@ -7,7 +11,7 @@ import coord_convert as cc
 
 class AMISR_param(object):
     """
-    This class contains parameter-specific quantities that are nessisary for fitting and/or plotting.  It also 
+    This class contains parameter-specific quantities that are nessisary for fitting and/or plotting.  It also
     has methods to read the nessisary arrays from processed AMISR files.
 
     Parameters:
@@ -148,101 +152,105 @@ class AMISR_param(object):
 #         return R0, value, error
 
 
-    def get_data(self,filename):
-        """
-        Read parameter from a processed AMISR hdf5 file and return the time, coordinates, values, and errors as arrays.
+    # def get_data(self,filename):
+    #     """
+    #     Read parameter from a processed AMISR hdf5 file and return the time, coordinates, values, and errors as arrays.
+    #
+    #     Parameters:
+    #         filename: [str]
+    #             filename/path of processed AMISR hdf5 file
+    #
+    #     Returns:
+    #         utime: [ndarray (nrecordsx2)]
+    #             start and end time of each record (Unix Time)
+    #         R0: [ndarray (3xnpoints)]
+    #             coordinates of each data point in spherical coordinate system
+    #         value: [ndarray (nrecordsxnpoints)]
+    #             parameter value of each data point
+    #         error: [ndarray (nrecordsxnpoints)]
+    #             error in parameter values
+    #     """
+    #
+    #     index_dict = {'frac':0, 'temp':1, 'colfreq':2}
+    #     mass_dict = {'O':16, 'O2':32, 'NO':30, 'N2':28, 'N':14}
+    #
+    #     with tables.open_file(filename,'r') as h5file:
+    #
+    #         utime = h5file.get_node('/Time/UnixTime')[:]
+    #
+    #         alt = h5file.get_node('/Geomag/Altitude')[:]
+    #         lat = h5file.get_node('/Geomag/Latitude')[:]
+    #         lon = h5file.get_node('/Geomag/Longitude')[:]
+    #         c2 = h5file.get_node('/FittedParams/FitInfo/chi2')[:]
+    #         fc = h5file.get_node('/FittedParams/FitInfo/fitcode')[:]
+    #         imass = h5file.get_node('/FittedParams/IonMass')[:]
+    #
+    #         if self.key == 'dens':
+    #             val = h5file.get_node('/FittedParams/Ne')[:]
+    #             err = h5file.get_node('/FittedParams/dNe')[:]
+    #         else:
+    #             param = self.key.split('_')
+    #             # find i index based on what the key starts with
+    #             i = index_dict[param[0]]
+    #             # find m index based on what the key ends with
+    #             try:
+    #                 m = int(np.where(imass == mass_dict[param[1]])[0])
+    #             except IndexError:
+    #                 m = -1
+    #             val = h5file.get_node('/FittedParams/Fits')[:,:,:,m,i]
+    #             err = h5file.get_node('/FittedParams/Errors')[:,:,:,m,i]
+    #
+    #
+    #     altitude = alt.flatten()
+    #     latitude = lat.flatten()
+    #     longitude = lon.flatten()
+    #     chi2 = c2.reshape(c2.shape[0], -1)
+    #     fitcode = fc.reshape(fc.shape[0], -1)
+    #
+    #     value = val.reshape(val.shape[0], -1)
+    #     error = err.reshape(err.shape[0], -1)
+    #
+    #     # This accounts for an error in some of the hdf5 files where chi2 is overestimated by 369.
+    #     if np.nanmedian(chi2) > 100.:
+    #         chi2 = chi2 - 369.
+    #
+    #     # data_check: 2D boolian array for removing "bad" data
+    #     # Each column correpsonds to a different "check" condition
+    #     # TRUE for "GOOD" point; FALSE for "BAD" point
+    #     # A "good" record that shouldn't be removed should be TRUE for EVERY check condition
+    #     if self.key == 'dens':
+    #         data_check = np.array([np.isfinite(error),error>1.e10,fitcode>0,fitcode<5,chi2<10,chi2>0.1])
+    #     elif 'temp' in self.key:
+    #         data_check = np.array([np.isfinite(error),fitcode>0,fitcode<5,chi2<10,chi2>0.1])
+    #     else:
+    #         data_check = np.array([np.isfinite(value)])
+    #
+    #     # If ANY elements of data_check are FALSE, flag index as bad data
+    #     bad_data = np.squeeze(np.any(data_check==False,axis=0,keepdims=True))
+    #     value[bad_data] = np.nan
+    #     error[bad_data] = np.nan
+    #
+    #     # remove the points where coordinate arrays are NaN
+    #     # these points usually correspond to altitude bins that were specified by the fitter but a particular beam does not reach
+    #     value = value[:,np.isfinite(altitude)]
+    #     error = error[:,np.isfinite(altitude)]
+    #     latitude = latitude[np.isfinite(altitude)]
+    #     longitude = longitude[np.isfinite(altitude)]
+    #     altitude = altitude[np.isfinite(altitude)]
+    #
+    #
+    #     # Convert input coordinates to geocentric-spherical
+    #     # r, t, p = cc.geodetic_to_spherical(latitude,longitude,altitude/1000.)
+    #     # R0 = np.array([r,t,p])
+    #     R0 = np.array([latitude, longitude, altitude/1000.])
+    #
+    #     return utime, R0, value, error
 
-        Parameters:
-            filename: [str]
-                filename/path of processed AMISR hdf5 file
 
-        Returns:
-            utime: [ndarray (nrecordsx2)]
-                start and end time of each record (Unix Time)
-            R0: [ndarray (3xnpoints)]
-                coordinates of each data point in spherical coordinate system
-            value: [ndarray (nrecordsxnpoints)]
-                parameter value of each data point
-            error: [ndarray (nrecordsxnpoints)]
-                error in parameter values
-        """
-
-        index_dict = {'frac':0, 'temp':1, 'colfreq':2}
-        mass_dict = {'O':16, 'O2':32, 'NO':30, 'N2':28, 'N':14}
-
-        with tables.open_file(filename,'r') as h5file:
-
-            utime = h5file.get_node('/Time/UnixTime')[:]
-
-            alt = h5file.get_node('/Geomag/Altitude')[:]
-            lat = h5file.get_node('/Geomag/Latitude')[:]
-            lon = h5file.get_node('/Geomag/Longitude')[:]
-            c2 = h5file.get_node('/FittedParams/FitInfo/chi2')[:]
-            fc = h5file.get_node('/FittedParams/FitInfo/fitcode')[:]
-            imass = h5file.get_node('/FittedParams/IonMass')[:]
-
-            if self.key == 'dens':
-                val = h5file.get_node('/FittedParams/Ne')[:]
-                err = h5file.get_node('/FittedParams/dNe')[:]
-            else:
-                param = self.key.split('_')
-                # find i index based on what the key starts with
-                i = index_dict[param[0]]
-                # find m index based on what the key ends with
-                try:
-                    m = int(np.where(imass == mass_dict[param[1]])[0])
-                except IndexError:
-                    m = -1
-                val = h5file.get_node('/FittedParams/Fits')[:,:,:,m,i]
-                err = h5file.get_node('/FittedParams/Errors')[:,:,:,m,i]
-
-
-        altitude = alt.flatten()
-        latitude = lat.flatten()
-        longitude = lon.flatten()
-        chi2 = c2.reshape(c2.shape[0], -1)
-        fitcode = fc.reshape(fc.shape[0], -1)
-        
-        value = val.reshape(val.shape[0], -1)
-        error = err.reshape(err.shape[0], -1)
-
-        # This accounts for an error in some of the hdf5 files where chi2 is overestimated by 369.
-        if np.nanmedian(chi2) > 100.:
-            chi2 = chi2 - 369.
-
-        # data_check: 2D boolian array for removing "bad" data
-        # Each column correpsonds to a different "check" condition
-        # TRUE for "GOOD" point; FALSE for "BAD" point
-        # A "good" record that shouldn't be removed should be TRUE for EVERY check condition
-        if self.key == 'dens':
-            data_check = np.array([np.isfinite(error),error>1.e10,fitcode>0,fitcode<5,chi2<10,chi2>0.1])
-        elif 'temp' in self.key:
-            data_check = np.array([np.isfinite(error),fitcode>0,fitcode<5,chi2<10,chi2>0.1])
-        else:
-            data_check = np.array([np.isfinite(value)])
-
-        # If ANY elements of data_check are FALSE, flag index as bad data
-        bad_data = np.squeeze(np.any(data_check==False,axis=0,keepdims=True))
-        value[bad_data] = np.nan
-        error[bad_data] = np.nan
-        
-        # remove the points where coordinate arrays are NaN
-        # these points usually correspond to altitude bins that were specified by the fitter but a particular beam does not reach
-        value = value[:,np.isfinite(altitude)]
-        error = error[:,np.isfinite(altitude)]
-        latitude = latitude[np.isfinite(altitude)]
-        longitude = longitude[np.isfinite(altitude)]
-        altitude = altitude[np.isfinite(altitude)]
-        
-        
-        # Convert input coordinates to geocentric-spherical
-        # r, t, p = cc.geodetic_to_spherical(latitude,longitude,altitude/1000.)
-        # R0 = np.array([r,t,p])
-        R0 = np.array([latitude, longitude, altitude/1000.])
-
-        return utime, R0, value, error
-    
-    
+    # This technique won't work for interpolating in time?
+    # May have the option to fit a 2D function? f(z,t)
+    # This will possibly complicate things more than it does any good.
+    # could also just implement regularizaiton in time?
     def eval_zeroth_order(self,x,data,error):
         """
         Find the coefficients for the zeroth order function
@@ -352,7 +360,7 @@ class AMISR_param(object):
 
 
 
-	
+
 
 
 # TODO: Remove this?
@@ -391,7 +399,7 @@ def find_index(filename,time):
 
 #     Returns:
 #         eventlist: [dict]
-#             list of dictionaries containing the timestamp, file name, radar mode, and index within the file for a 
+#             list of dictionaries containing the timestamp, file name, radar mode, and index within the file for a
 #             particular event
 #     """
 

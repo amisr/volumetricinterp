@@ -11,8 +11,10 @@ import tables
 import coord_convert as cc
 
 from Model import Model
-from Param import AMISR_param
+# from Param import AMISR_param
 
+# make Model an attribute of class instead of inhereted
+# this  will let which model to use be defined in the config file
 class Fit(Model):
     """
     This class performs the least-squares fit of the data to the 3D analytic model to find the coefficient vector for the model.
@@ -69,9 +71,9 @@ class Fit(Model):
     """
 
     def __init__(self,config_file):
-        
+
         self.read_config(config_file)
-        
+
     def read_config(self, config_file):
         # read config file
         config = configparser.ConfigParser()
@@ -80,18 +82,18 @@ class Fit(Model):
         maxk = eval(config.get('DEFAULT','MAXK'))
         maxl = eval(config.get('DEFAULT','MAXL'))
         cap_lim = eval(config.get('DEFAULT','CAP_LIM'))
-        
+
         super().__init__(maxk,maxl,cap_lim)
-        
+
         self.regularization_list = eval(config.get('DEFAULT','REGULARIZATION_LIST'))
         self.reg_method = eval(config.get('DEFAULT','REGULARIZATION_METHOD'))
         self.max_z_int = float(config.get('DEFAULT','MAX_Z_INT'))
-    
+
         self.filename = eval(config.get('DEFAULT','FILENAME'))
         self.outputfilename = eval(config.get('DEFAULT','OUTPUTFILENAME'))
-                               
-        param = eval(config.get('DEFAULT', 'PARAM'))
-        self.param = AMISR_param(param)
+
+        self.param = eval(config.get('DEFAULT', 'PARAM'))
+        # self.param = AMISR_param(param)
 
 
 
@@ -105,7 +107,7 @@ class Fit(Model):
             - gcv: use Generalized Cross validation
             - manual: hardcode in regularization parameters
             - prompt: ask user for regularization parameters via a prompt
-        
+
         Parameters:
             A: [ndarray(npoints,nbasis)]
                 array of basis functions evaluated at all input points
@@ -126,9 +128,9 @@ class Fit(Model):
                 to lead to over smothing, but it's the best approach we have right now because most standard methods of selecting
                 regularization parameters only consider one condition (one condition = one unkown).  There is some literature on how
                 to find multiple regularization parameters simultaniously, but have not had luck implementing any of these techniques.
-            - Regularization (particularly choosing an "appropriate" regularization parameter) is VERY finiky.  This function attempts 
+            - Regularization (particularly choosing an "appropriate" regularization parameter) is VERY finiky.  This function attempts
                 to have reasonable defaults and options, but it is HIGHLY unlikely these will work well in all cases.  The author has
-                tried to make the code flexible so new methods can be added "easily", but appologizes in advance for the headache 
+                tried to make the code flexible so new methods can be added "easily", but appologizes in advance for the headache
                 this will undoubtably cause.
         """
 
@@ -224,7 +226,7 @@ class Fit(Model):
 
     def chi2objfunct(self,alpha,A,b,W,reg_matrices,nu,reg):
         """
-        Objective function for the chi2 method of finding the regularization parameter.  Returns chi^2-nu for a given 
+        Objective function for the chi2 method of finding the regularization parameter.  Returns chi^2-nu for a given
          regularization parameter.
 
         Parameters:
@@ -262,7 +264,7 @@ class Fit(Model):
         # compute chi^2
         val = np.squeeze(np.dot(A,C))
         chi2 = sum((val-np.squeeze(b))**2*np.squeeze(W))
- 
+
         return chi2-nu
 
 
@@ -330,7 +332,7 @@ class Fit(Model):
                 function.
         """
 
-        # Define reg_params dictionary        
+        # Define reg_params dictionary
         reg_params = {}
         for rl in self.regularization_list:
             if rl == reg:
@@ -476,6 +478,9 @@ class Fit(Model):
         AWA = np.dot(A.T,W*A)
         X = np.dot(A.T,W*A)
         y = np.dot(A.T,W*b)
+        # generalize this more
+        # user should be able sto specify any model and regularization method
+        # if provided model doesn't include methods for computing those regularization matricies, raise error
         if 'curvature' in self.regularization_list:
             X = X + reg_params['curvature']*reg_matrices['Omega']
         if '0thorder' in self.regularization_list:
@@ -510,10 +515,10 @@ class Fit(Model):
             reg_matrices['Omega'] = self.eval_omega()
         if '0thorder' in self.regularization_list:
             reg_matrices['Psi'] = self.eval_psi()
- 
+
         # read data from AMISR fitted file
-        utime, R00, value, error = self.param.get_data(self.filename)
-        
+        utime, R00, value, error = self.get_data(self.filename)
+
         # if a starttime and endtime are given, rewrite utime, value, and error arrays so
         #   they only contain records between those two times
         if starttime and endtime:
@@ -521,17 +526,18 @@ class Fit(Model):
             utime = utime[idx,:]
             value = value[idx]
             error = error[idx]
- 
+
         # Find convex hull of original data set
         verticies = self.compute_hull(R00)
-        
+
         # Transform coordinates
         R0, cp = self.transform_coord(R00)
 
         # loop over every record and calculate the coefficients
-        for ut, ne0, er0 in zip(utime, value, error):
+        # if modeling time variation, this loop will change?
+        for ut, ne0, er0 in zip(utime[:10], value[:10], error[:10]):
             print(dt.datetime.utcfromtimestamp(ut[0]))
-            
+
             R = R0[:,np.isfinite(ne0)]
             er0 = er0[np.isfinite(ne0)]
             ne0 = ne0[np.isfinite(ne0)]
@@ -554,7 +560,7 @@ class Fit(Model):
                 # NaNs in C, dC, c2
                 Coeffs.append(np.full(self.nbasis, np.nan))
                 Covariance.append(np.full((self.nbasis,self.nbasis), np.nan))
-                chi_sq.append(np.nan)                
+                chi_sq.append(np.nan)
                 continue
 
             # define matricies
@@ -570,7 +576,7 @@ class Fit(Model):
                 # NaNs in C, dC, c2
                 Coeffs.append(np.full(self.nbasis, np.nan))
                 Covariance.append(np.full((self.nbasis,self.nbasis), np.nan))
-                chi_sq.append(np.nan)                
+                chi_sq.append(np.nan)
                 continue
 
             # calculate coefficients and covarience matrix
@@ -578,7 +584,7 @@ class Fit(Model):
 
             # calculate chi2
             c2 = sum((np.squeeze(np.dot(A,C))-np.squeeze(b))**2*np.squeeze(W))
-            
+
             # append lists
             Coeffs.append(C)
             Covariance.append(dC)
@@ -596,6 +602,102 @@ class Fit(Model):
         self.raw_filename = self.filename
 
 
+    def get_data(self,filename):
+        """
+        Read parameter from a processed AMISR hdf5 file and return the time, coordinates, values, and errors as arrays.
+
+        Parameters:
+            filename: [str]
+                filename/path of processed AMISR hdf5 file
+
+        Returns:
+            utime: [ndarray (nrecordsx2)]
+                start and end time of each record (Unix Time)
+            R0: [ndarray (3xnpoints)]
+                coordinates of each data point in spherical coordinate system
+            value: [ndarray (nrecordsxnpoints)]
+                parameter value of each data point
+            error: [ndarray (nrecordsxnpoints)]
+                error in parameter values
+        """
+
+        index_dict = {'frac':0, 'temp':1, 'colfreq':2}
+        mass_dict = {'O':16, 'O2':32, 'NO':30, 'N2':28, 'N':14}
+
+        with tables.open_file(filename,'r') as h5file:
+
+            utime = h5file.get_node('/Time/UnixTime')[:]
+
+            alt = h5file.get_node('/Geomag/Altitude')[:]
+            lat = h5file.get_node('/Geomag/Latitude')[:]
+            lon = h5file.get_node('/Geomag/Longitude')[:]
+            c2 = h5file.get_node('/FittedParams/FitInfo/chi2')[:]
+            fc = h5file.get_node('/FittedParams/FitInfo/fitcode')[:]
+            imass = h5file.get_node('/FittedParams/IonMass')[:]
+
+            if self.param == 'dens':
+                val = h5file.get_node('/FittedParams/Ne')[:]
+                err = h5file.get_node('/FittedParams/dNe')[:]
+            else:
+                param = self.param.split('_')
+                # find i index based on what the key starts with
+                i = index_dict[param[0]]
+                # find m index based on what the key ends with
+                try:
+                    m = int(np.where(imass == mass_dict[param[1]])[0])
+                except IndexError:
+                    m = -1
+                val = h5file.get_node('/FittedParams/Fits')[:,:,:,m,i]
+                err = h5file.get_node('/FittedParams/Errors')[:,:,:,m,i]
+
+
+        altitude = alt.flatten()
+        latitude = lat.flatten()
+        longitude = lon.flatten()
+        chi2 = c2.reshape(c2.shape[0], -1)
+        fitcode = fc.reshape(fc.shape[0], -1)
+
+        value = val.reshape(val.shape[0], -1)
+        error = err.reshape(err.shape[0], -1)
+
+        # This accounts for an error in some of the hdf5 files where chi2 is overestimated by 369.
+        if np.nanmedian(chi2) > 100.:
+            chi2 = chi2 - 369.
+
+        # data_check: 2D boolian array for removing "bad" data
+        # Each column correpsonds to a different "check" condition
+        # TRUE for "GOOD" point; FALSE for "BAD" point
+        # A "good" record that shouldn't be removed should be TRUE for EVERY check condition
+        ##  MAKE THESE LIMITS CUSTOMIZABLE IN THE CONFIG FILE
+        if self.param == 'dens':
+            data_check = np.array([np.isfinite(error),error>1.e10,fitcode>0,fitcode<5,chi2<10,chi2>0.1])
+        elif 'temp' in self.param:
+            data_check = np.array([np.isfinite(error),fitcode>0,fitcode<5,chi2<10,chi2>0.1])
+        else:
+            data_check = np.array([np.isfinite(value)])
+
+        # If ANY elements of data_check are FALSE, flag index as bad data
+        bad_data = np.squeeze(np.any(data_check==False,axis=0,keepdims=True))
+        value[bad_data] = np.nan
+        error[bad_data] = np.nan
+
+        # remove the points where coordinate arrays are NaN
+        # these points usually correspond to altitude bins that were specified by the fitter but a particular beam does not reach
+        value = value[:,np.isfinite(altitude)]
+        error = error[:,np.isfinite(altitude)]
+        latitude = latitude[np.isfinite(altitude)]
+        longitude = longitude[np.isfinite(altitude)]
+        altitude = altitude[np.isfinite(altitude)]
+
+
+        # Convert input coordinates to geocentric-spherical
+        # r, t, p = cc.geodetic_to_spherical(latitude,longitude,altitude/1000.)
+        # R0 = np.array([r,t,p])
+        R0 = np.array([latitude, longitude, altitude/1000.])
+
+        return utime, R0, value, error
+
+
 
     def saveh5(self):
         # TODO: compress arrays to reduce coefficient file size
@@ -605,7 +707,7 @@ class Fit(Model):
         Parameters:
             None
         """
-        
+
         with tables.open_file(self.outputfilename, 'w') as h5out:
 
             cgroup = h5out.create_group('/','Coeffs','Dataset')
@@ -616,7 +718,7 @@ class Fit(Model):
 
             h5out.create_array(cgroup, 'C', self.Coeffs)
             h5out.create_array(cgroup, 'dC', self.Covariance)
-            
+
             h5out.create_array(fgroup, 'kmax', self.maxk)
             h5out.create_array(fgroup, 'lmax', self.maxl)
             h5out.create_array(fgroup, 'cap_lim', self.cap_lim*180./np.pi)
@@ -634,7 +736,7 @@ class Fit(Model):
 
 
 
-
+# move this function to a seperate script
     def validate(self,starttime, endtime, altitude, altlim=30.):
         """
         Creates a basic map of the volumetric reconstruction with the original data at a particular altitude slice to confirm that the reconstruction is reasonable.
@@ -657,7 +759,7 @@ class Fit(Model):
         import cartopy.crs as ccrs
 
         self.fit(starttime=starttime, endtime=endtime)
-        
+
         lat0, lon0, alt0 = self.raw_coords
 
         # set input coordinates
@@ -670,7 +772,7 @@ class Fit(Model):
 
         map_proj = ccrs.LambertConformal(central_latitude=np.mean(lat0), central_longitude=np.mean(lon0))
         denslim = [0., 3.e11]
-    
+
         for i, (rd, C) in enumerate(zip(self.raw_data, self.Coeffs)):
             out = self.eval_model(R0,C)
             ne = out['param'].reshape(tuple(list(Rshape)[1:]))
@@ -816,7 +918,7 @@ class Fit(Model):
 
 
     def maps(self):
-        
+
         self.timeinterp = False
         time = np.array([dt.datetime.utcfromtimestamp(t) for t in self.time[:,1]])
 
@@ -825,7 +927,7 @@ class Fit(Model):
         lonrange = np.linspace(-100.,-80.,50)
         latitude, longitude = np.meshgrid(latrange,lonrange)
         altitude = np.full(latitude.shape, 300.)
-        
+
         # Convert input coordinates to geocentric-spherical
         r, t, p = cc.geodetic_to_spherical(latitude,longitude,altitude)
         R0 = np.array([r,t,p])
@@ -833,5 +935,3 @@ class Fit(Model):
         for t in time:
             ne = self.getparam(t,R0)
             print(ne[np.isfinite(ne)])
-
-

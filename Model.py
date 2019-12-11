@@ -3,10 +3,11 @@
 import numpy as np
 import scipy.special as sp
 import scipy.integrate
-import coord_convert as cc
+import coord_convert as cc  # replace all instances of this with pymap3d
 
-RE = 6371.2*1000.           # Earth Radius (m)	
+RE = 6371.2*1000.           # Earth Radius (m)
 
+# Adapt model to fit for time as well
 class Model(object):
     # TODO: update docstring
     """
@@ -160,7 +161,7 @@ class Model(object):
         # print np.shape(np.array(Ag).T)
         return np.array(Ag).T
 
-    
+
     def eval_omega(self):
         omega = np.zeros((self.nbasis,self.nbasis))
         for ni in range(self.nbasis):
@@ -305,7 +306,7 @@ class Model(object):
                 out['gerr'] = graderr
         return out
 
-        
+
     def Az(self,v,m,phi):
         """
         Evaluates the azimuthal function
@@ -319,7 +320,7 @@ class Model(object):
                 array of phi values (radians)
         Returns:
             az: [ndarray]
-                evaluated azimuthal function at all values of phi 
+                evaluated azimuthal function at all values of phi
         """
         if m < 0:
             return self.Kvm(v,abs(m))*np.sin(abs(m)*phi)
@@ -340,7 +341,7 @@ class Model(object):
                 array of phi values (radians)
         Returns:
             daz: [ndarray]
-                evaluated derivative of the azimuthal function at all values of phi 
+                evaluated derivative of the azimuthal function at all values of phi
         """
         if m < 0:
             return abs(m)*self.Kvm(v,abs(m))*np.cos(abs(m)*phi)
@@ -444,5 +445,3 @@ class Model(object):
         vec_rot = np.array([vr,vt,vp]).T
 
         return vec_rot
-
-    

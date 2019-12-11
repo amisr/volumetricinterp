@@ -8,6 +8,7 @@ import coord_convert as cc
 
 from Model import Model
 
+# change name to evaluate?
 class EvalParam(Model):
     """
     This class evaluates the 3D analytic model that is used to describe density and temperature within an AMISR FoV.
@@ -78,7 +79,7 @@ class EvalParam(Model):
         with tables.open_file(filename, 'r') as h5file:
             self.Coeffs = h5file.get_node('/Coeffs/C')[:]
             self.Covariance = h5file.get_node('/Coeffs/dC')[:]
-            
+
             self.time = h5file.get_node('/UnixTime')[:]
 
             maxk = h5file.get_node('/FitParams/kmax').read()
@@ -90,9 +91,9 @@ class EvalParam(Model):
 
         super().__init__(maxk,maxl,cap_lim)
 
-                
-                
-                
+
+
+
 
 
 #     def getparam(self,R0,calcgrad=True,calcerr=False):
@@ -150,12 +151,12 @@ class EvalParam(Model):
                 graderr = self.inverse_transform(R,graderr,self.cp)
                 graderr[~check] = [np.nan,np.nan,np.nan]
             return P, dP, err, graderr
-        
+
         else:
             return P.reshape(tuple(list(Rshape)[1:]))
 
-    
-    
+
+
 #     def transform_coord(self,R0):
 #         """
 #         Transform from spherical coordinates to something friendlier for calculating the basis fit.
@@ -247,7 +248,7 @@ class EvalParam(Model):
         # x, y, z = cc.spherical_to_cartesian(self.hull_v[:,0],self.hull_v[:,1],self.hull_v[:,2])
         x, y, z = cc.geodetic_to_cartesian(self.hull_v[:,0],self.hull_v[:,1],self.hull_v[:,2])
         vert_cart = np.array([x,y,z]).T
-        
+
         hull = ConvexHull(vert_cart)
         check = []
         for R in R0.T:
@@ -267,7 +268,7 @@ class EvalParam(Model):
     def get_C(self, t):
         """
         Return values for C and dC based on a given time and whether or not time intepolation has been selected
-        
+
         Parameters:
             t: [datetime object]
                 target time
@@ -278,20 +279,20 @@ class EvalParam(Model):
             dC: [ndarray(nbasisxnbasis)]
                 covariance matrix
         """
-            
+
         # find unix time of requested point
         t0 = (t-dt.datetime.utcfromtimestamp(0)).total_seconds()
 
         # find time of mid-points
         mt = np.array([(float(ut[0])+float(ut[1]))/2. for ut in self.time])
-        
+
         if t0<np.min(mt) or t0>np.max(mt):
             print('Time out of range!')
             C = np.full(self.nbasis,np.nan)
             dC = np.full((self.nbasis,self.nbasis),np.nan)
 
         else:
-            if self.timeinterp:            
+            if self.timeinterp:
                 # find index of neighboring points
                 i = np.argwhere((t0>=mt[:-1]) & (t0<mt[1:])).flatten()[0]
                 # calculate T
@@ -306,7 +307,7 @@ class EvalParam(Model):
                 dC = self.Covariance[i]
 
         return C, dC
-    
+
     def find_index(self, t):
         """
         Find the index of a file that is closest to the given time
@@ -325,5 +326,3 @@ class EvalParam(Model):
         rec = np.argmin(np.abs(time_array-time0))
 
         return rec
-
-
