@@ -63,6 +63,7 @@ class Model(object):
         self.nbasis = self.maxk*self.maxl**2
         self.cap_lim = self.cap_lim*np.pi/180.
 
+        self.eval_reg_matricies = {'curvature':self.eval_omega,'0thorder':self.eval_psi}
 
     def read_config(self, config_file):
         # read config file
@@ -72,6 +73,7 @@ class Model(object):
         self.maxk = eval(config.get('MODEL','MAXK'))
         self.maxl = eval(config.get('MODEL','MAXL'))
         self.cap_lim = eval(config.get('MODEL','CAP_LIM'))
+        self.max_z_int = float(eval(config.get('MODEL','MAX_Z_INT')))
 
         # super().__init__(maxk,maxl,cap_lim)
 
@@ -180,6 +182,7 @@ class Model(object):
         # print np.shape(np.array(Ag).T)
         return np.array(Ag).T
 
+    # regularize to IRI? - scaled IRI probably
 
     def eval_omega(self):
         omega = np.zeros((self.nbasis,self.nbasis))

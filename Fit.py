@@ -163,7 +163,8 @@ class Fit(object):
         return reg_params
 
 
-
+    # consider modularizing out regularization Methods
+    # these are probably things that will be changing/evolving frequently
     def chi2(self,A,b,W,reg_matrices,reg):
         """
         Find the regularization parameter using the chi2 method.
@@ -489,13 +490,15 @@ class Fit(object):
         X = np.dot(A.T,W*A)
         y = np.dot(A.T,W*b)
         # generalize this more
-        # user should be able sto specify any model and regularization method
+        # user should be able to specify any model and regularization method
         # if provided model doesn't include methods for computing those regularization matricies, raise error
-        if 'curvature' in self.regularization_list:
-            X = X + reg_params['curvature']*reg_matrices['Omega']
-        if '0thorder' in self.regularization_list:
-            X = X + reg_params['0thorder']*reg_matrices['Psi']
-            y = y + reg_params['0thorder']*reg_matrices['Tau']
+        # if 'curvature' in self.regularization_list:
+        #     X = X + reg_params['curvature']*reg_matrices['Omega']
+        # if '0thorder' in self.regularization_list:
+        #     X = X + reg_params['0thorder']*reg_matrices['Psi']
+        #     y = y + reg_params['0thorder']*reg_matrices['Tau']
+        for reg in self.regularization_list:
+            X = X + reg_params[reg]*reg_matrices[reg]
         C = np.squeeze(scipy.linalg.lstsq(X,y,overwrite_a=True,overwrite_b=True)[0])
 
         if calccov:
@@ -520,11 +523,14 @@ class Fit(object):
         chi_sq = []
 
         print('Evaluating Regularization matricies.  This may take a few minutes.')
-        reg_matrices = {}
-        if 'curvature' in self.regularization_list:
-            reg_matrices['Omega'] = self.eval_omega()
-        if '0thorder' in self.regularization_list:
-            reg_matrices['Psi'] = self.eval_psi()
+        reg_matricies = {}
+        # if 'curvature' in self.regularization_list:
+        #     reg_matrices['Omega'] = self.eval_omega()
+        # if '0thorder' in self.regularization_list:
+        #     reg_matrices['Psi'] = self.eval_psi()
+
+        for reg in self.regularization_list:
+            reg_matricies[reg] = self.model.eval_reg_matricies[reg]()
 
         # read data from AMISR fitted file
         utime, R00, value, error = self.get_data(self.filename)
@@ -552,21 +558,21 @@ class Fit(object):
             er0 = er0[np.isfinite(ne0)]
             ne0 = ne0[np.isfinite(ne0)]
 
-            # Evaluate Tau regularization matrix - this is based on data and must be in loop
-            if '0thorder' in self.regularization_list:
-
-                # try:
-                # self.param.eval_zeroth_order(R[0],data,error)
-                self.param.eval_zeroth_order(R[0],ne0,er0)
-                tau = self.eval_tau(self.param.zeroth_order)
-                # except RuntimeError:
-                #     tau = np.full((self.nbasis,),np.nan)
-                reg_matrices['Tau'] = tau
-                # reg_matrices['Tau'] = self.eval_tau(R,ne0,er0)
+            # # Evaluate Tau regularization matrix - this is based on data and must be in loop
+            # if '0thorder' in self.regularization_list:
+            #
+            #     # try:
+            #     # self.param.eval_zeroth_order(R[0],data,error)
+            #     self.param.eval_zeroth_order(R[0],ne0,er0)
+            #     tau = self.eval_tau(self.param.zeroth_order)
+            #     # except RuntimeError:
+            #     #     tau = np.full((self.nbasis,),np.nan)
+            #     reg_matrices['Tau'] = tau
+            #     # reg_matrices['Tau'] = self.eval_tau(R,ne0,er0)
 
 
             # if regularization matricies are NaN, skip this record - fit can not be computed
-            if np.any([np.any(np.isnan(v.flatten())) for k, v in reg_matrices.items()]):
+            if np.any([np.any(np.isnan(v.flatten())) for v in reg_matricies.values()]):
                 # NaNs in C, dC, c2
                 Coeffs.append(np.full(self.model.nbasis, np.nan))
                 Covariance.append(np.full((self.model.nbasis,self.model.nbasis), np.nan))
@@ -579,10 +585,10 @@ class Fit(object):
             A = self.model.eval_basis(R)
 
             # calculate regularization parameters
-            reg_params = self.find_reg_param(A,b,W,reg_matrices,method=self.reg_method)
+            reg_params = self.find_reg_param(A,b,W,reg_matricies,method=self.reg_method)
 
             # if regularization parameters are NaN, skip this record - fit can not be computed
-            if np.any(np.isnan([v for k, v in reg_params.items()])):
+            if np.any(np.isnan([v for v in reg_params.values()])):
                 # NaNs in C, dC, c2
                 Coeffs.append(np.full(self.model.nbasis, np.nan))
                 Covariance.append(np.full((self.model.nbasis,self.model.nbasis), np.nan))
@@ -590,7 +596,7 @@ class Fit(object):
                 continue
 
             # calculate coefficients and covarience matrix
-            C, dC = self.eval_C(A,b,W,reg_matrices,reg_params,calccov=True)
+            C, dC = self.eval_C(A,b,W,reg_matricies,reg_params,calccov=True)
 
             # calculate chi2
             c2 = sum((np.squeeze(np.dot(A,C))-np.squeeze(b))**2*np.squeeze(W))
