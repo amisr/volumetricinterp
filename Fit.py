@@ -80,12 +80,12 @@ class Fit(object):
         # print(self.model_name)
         # from self.model_name import Model
         m = importlib.import_module(self.model_name)
-        self.model = m.Model(self.configfile)
+        self.model = m.Model(open(self.configfile))
 
     def read_config(self, config_file):
         # read config file
         config = configparser.ConfigParser()
-        config.read(config_file)
+        config.read_file(open(config_file))
 
         self.regularization_list = eval(config.get('DEFAULT','REGULARIZATION_LIST'))
         self.reg_method = eval(config.get('DEFAULT','REGULARIZATION_METHOD'))
@@ -108,7 +108,8 @@ class Fit(object):
 
 
 
-
+    # inform regularization parameter by beam seperation?
+    # the more beams, the more features can be resolved?
 
     def find_reg_param(self,A,b,W,reg_matrices,method=None):
         """
@@ -533,7 +534,7 @@ class Fit(object):
             reg_matricies[reg] = self.model.eval_reg_matricies[reg]()
 
         # read data from AMISR fitted file
-        utime, R00, value, error = self.get_data(self.filename)
+        utime, R0, value, error = self.get_data(self.filename)
 
         # if a starttime and endtime are given, rewrite utime, value, and error arrays so
         #   they only contain records between those two times
@@ -544,10 +545,10 @@ class Fit(object):
             error = error[idx]
 
         # Find convex hull of original data set
-        verticies = self.compute_hull(R00)
+        verticies = self.compute_hull(R0)
 
-        # Transform coordinates
-        R0, cp = self.model.transform_coord(R00)
+        # # Transform coordinates
+        # R0, cp = self.model.transform_coord(R00)
 
         # loop over every record and calculate the coefficients
         # if modeling time variation, this loop will change?
@@ -557,6 +558,12 @@ class Fit(object):
             R = R0[:,np.isfinite(ne0)]
             er0 = er0[np.isfinite(ne0)]
             ne0 = ne0[np.isfinite(ne0)]
+
+            # define matricies
+            W = np.array(er0**(-2))[:,None]
+            b = ne0[:,None]
+            A = self.model.eval_basis(R)
+
 
             # # Evaluate Tau regularization matrix - this is based on data and must be in loop
             # if '0thorder' in self.regularization_list:
@@ -571,18 +578,18 @@ class Fit(object):
             #     # reg_matrices['Tau'] = self.eval_tau(R,ne0,er0)
 
 
-            # if regularization matricies are NaN, skip this record - fit can not be computed
-            if np.any([np.any(np.isnan(v.flatten())) for v in reg_matricies.values()]):
-                # NaNs in C, dC, c2
-                Coeffs.append(np.full(self.model.nbasis, np.nan))
-                Covariance.append(np.full((self.model.nbasis,self.model.nbasis), np.nan))
-                chi_sq.append(np.nan)
-                continue
+            # # if regularization matricies are NaN, skip this record - fit can not be computed
+            # if np.any([np.any(np.isnan(v.flatten())) for v in reg_matricies.values()]):
+            #     # NaNs in C, dC, c2
+            #     Coeffs.append(np.full(self.model.nbasis, np.nan))
+            #     Covariance.append(np.full((self.model.nbasis,self.model.nbasis), np.nan))
+            #     chi_sq.append(np.nan)
+            #     continue
 
-            # define matricies
-            W = np.array(er0**(-2))[:,None]
-            b = ne0[:,None]
-            A = self.model.eval_basis(R)
+            # # define matricies
+            # W = np.array(er0**(-2))[:,None]
+            # b = ne0[:,None]
+            # A = self.model.eval_basis(R)
 
             # calculate regularization parameters
             reg_params = self.find_reg_param(A,b,W,reg_matricies,method=self.reg_method)
@@ -610,11 +617,11 @@ class Fit(object):
         self.Coeffs = np.array(Coeffs)
         self.Covariance = np.array(Covariance)
         self.chi_sq = np.array(chi_sq)
-        self.cent_point = cp
+        # self.cent_point = cp
         self.hull_v = verticies
-        self.raw_coords = R00
-        self.raw_data = value
-        self.raw_error = error
+        # self.raw_coords = R00
+        # self.raw_data = value
+        # self.raw_error = error
         self.raw_filename = self.filename
 
 
@@ -746,13 +753,13 @@ class Fit(object):
             h5out.create_array(fgroup, 'regmethod', self.reg_method.encode('utf-8'))
 #             h5out.create_array(fgroup, 'regscalefac', self.reg_scale_factor)
             h5out.create_array(fgroup, 'chi2', self.chi_sq)
-            h5out.create_array(fgroup, 'center_point', self.cent_point)
+            # h5out.create_array(fgroup, 'center_point', self.cent_point)
             h5out.create_array(fgroup, 'hull_verticies', self.hull_v)
 
             h5out.create_array(dgroup, 'filename', self.raw_filename.encode('utf-8'))
-            h5out.create_array(dgroup, 'coordinates', self.raw_coords)
-            h5out.create_array(dgroup, 'data', self.raw_data)
-            h5out.create_array(dgroup, 'error', self.raw_error)
+            # h5out.create_array(dgroup, 'coordinates', self.raw_coords)
+            # h5out.create_array(dgroup, 'data', self.raw_data)
+            # h5out.create_array(dgroup, 'error', self.raw_error)
 
             # config file
             Path = os.path.dirname(os.path.abspath(self.configfile))
@@ -767,64 +774,64 @@ class Fit(object):
 
 
 
-# move this function to a seperate script
-    def validate(self,starttime, endtime, altitude, altlim=30.):
-        """
-        Creates a basic map of the volumetric reconstruction with the original data at a particular altitude slice to confirm that the reconstruction is reasonable.
-        This function is designed to fit and plot only a small subset of an experiment (between starttime and endtime) so that it can be used to fine-tune parameters
-        without waiting for an entire experiment to be processed
-
-        Parameters:
-            starttime: [datetime]
-                start of interval to validate
-            endtime: [datetime]
-                end of interval to validate
-            altitude: [float]
-                altitude of the slice
-            altlim: [float]
-                points that fall +/- altlim from altitude will be plotted on top of reconstructed contours as scatter
-        """
-
-        import matplotlib.pyplot as plt
-        import matplotlib.gridspec as gridspec
-        import cartopy.crs as ccrs
-
-        self.fit(starttime=starttime, endtime=endtime)
-
-        lat0, lon0, alt0 = self.raw_coords
-
-        # set input coordinates
-        latn, lonn = np.meshgrid(np.linspace(min(lat0), max(lat0), 50), np.linspace(min(lon0), max(lon0), 50))
-        altn = np.full(latn.shape, altitude)
-        R0n = np.array([latn, lonn, altn])
-
-        Rshape = R0n.shape
-        R0 = R0n.reshape(Rshape[0], -1)
-
-        map_proj = ccrs.LambertConformal(central_latitude=np.mean(lat0), central_longitude=np.mean(lon0))
-        denslim = [0., 3.e11]
-
-        for i, (rd, C) in enumerate(zip(self.raw_data, self.Coeffs)):
-            out = self.eval_model(R0,C)
-            ne = out['param'].reshape(tuple(list(Rshape)[1:]))
-
-            # create plot
-            fig = plt.figure(figsize=(10,10))
-            ax = fig.add_axes([0.02, 0.1, 0.9, 0.8], projection=map_proj)
-            ax.coastlines()
-            ax.gridlines()
-            ax.set_extent([min(lon0),max(lon0),min(lat0),max(lat0)])
-
-            # plot density contours from RISR
-            c = ax.contourf(lonn, latn, ne, np.linspace(denslim[0],denslim[1],31), extend='both', transform=ccrs.PlateCarree())
-            ax.scatter(lon0[np.abs(alt0-altitude)<altlim], lat0[np.abs(alt0-altitude)<altlim], c=rd[np.abs(alt0-altitude)<altlim], vmin=denslim[0], vmax=denslim[1], transform=ccrs.Geodetic())
-
-            cax = fig.add_axes([0.91,0.1,0.03,0.8])
-            cbar = plt.colorbar(c, cax=cax)
-            cbar.set_label(r'Electron Density (m$^{-3}$)')
-
-            plt.savefig('temp{:02d}.png'.format(i))
-            plt.close(fig)
+# # move this function to a seperate script
+#     def validate(self,starttime, endtime, altitude, altlim=30.):
+#         """
+#         Creates a basic map of the volumetric reconstruction with the original data at a particular altitude slice to confirm that the reconstruction is reasonable.
+#         This function is designed to fit and plot only a small subset of an experiment (between starttime and endtime) so that it can be used to fine-tune parameters
+#         without waiting for an entire experiment to be processed
+#
+#         Parameters:
+#             starttime: [datetime]
+#                 start of interval to validate
+#             endtime: [datetime]
+#                 end of interval to validate
+#             altitude: [float]
+#                 altitude of the slice
+#             altlim: [float]
+#                 points that fall +/- altlim from altitude will be plotted on top of reconstructed contours as scatter
+#         """
+#
+#         import matplotlib.pyplot as plt
+#         import matplotlib.gridspec as gridspec
+#         import cartopy.crs as ccrs
+#
+#         self.fit(starttime=starttime, endtime=endtime)
+#
+#         lat0, lon0, alt0 = self.raw_coords
+#
+#         # set input coordinates
+#         latn, lonn = np.meshgrid(np.linspace(min(lat0), max(lat0), 50), np.linspace(min(lon0), max(lon0), 50))
+#         altn = np.full(latn.shape, altitude)
+#         R0n = np.array([latn, lonn, altn])
+#
+#         Rshape = R0n.shape
+#         R0 = R0n.reshape(Rshape[0], -1)
+#
+#         map_proj = ccrs.LambertConformal(central_latitude=np.mean(lat0), central_longitude=np.mean(lon0))
+#         denslim = [0., 3.e11]
+#
+#         for i, (rd, C) in enumerate(zip(self.raw_data, self.Coeffs)):
+#             out = self.eval_model(R0,C)
+#             ne = out['param'].reshape(tuple(list(Rshape)[1:]))
+#
+#             # create plot
+#             fig = plt.figure(figsize=(10,10))
+#             ax = fig.add_axes([0.02, 0.1, 0.9, 0.8], projection=map_proj)
+#             ax.coastlines()
+#             ax.gridlines()
+#             ax.set_extent([min(lon0),max(lon0),min(lat0),max(lat0)])
+#
+#             # plot density contours from RISR
+#             c = ax.contourf(lonn, latn, ne, np.linspace(denslim[0],denslim[1],31), extend='both', transform=ccrs.PlateCarree())
+#             ax.scatter(lon0[np.abs(alt0-altitude)<altlim], lat0[np.abs(alt0-altitude)<altlim], c=rd[np.abs(alt0-altitude)<altlim], vmin=denslim[0], vmax=denslim[1], transform=ccrs.Geodetic())
+#
+#             cax = fig.add_axes([0.91,0.1,0.03,0.8])
+#             cbar = plt.colorbar(c, cax=cax)
+#             cbar.set_label(r'Electron Density (m$^{-3}$)')
+#
+#             plt.savefig('temp{:02d}.png'.format(i))
+#             plt.close(fig)
 
 #         self.datetime = time0
 

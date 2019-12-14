@@ -5,11 +5,14 @@ import datetime as dt
 import tables
 from scipy.spatial import ConvexHull
 import coord_convert as cc
+import io
+import configparser
+import importlib
 
-from Model import Model
+# from Model import Model
 
 # change name to evaluate?
-class EvalParam(Model):
+class EvalParam(object):
     """
     This class evaluates the 3D analytic model that is used to describe density and temperature within an AMISR FoV.
     It handles a lot of the nitty-gritty coordinate transformations and loading coefficients from file that are nessisary before the model is evaluated.
@@ -57,12 +60,15 @@ class EvalParam(Model):
 
         self.loadh5(filename=coeff_filename)
 
-        config_file = io.StringIO(self.config_file_text)
+        config_file = io.StringIO(self.config_file_text.decode('utf-8'))
+        # for line in open(config_file,'r'):
+        #     print(line)
 
         config = configparser.ConfigParser()
-        config.read(config_file)
+        config.read_file(config_file)
         model_name = eval(config.get('MODEL', 'MODEL'))
 
+        config_file.seek(0)
         m = importlib.import_module(model_name)
         self.model = m.Model(config_file)
 #         try:
@@ -91,11 +97,11 @@ class EvalParam(Model):
 
             self.time = h5file.get_node('/UnixTime')[:]
 
-            maxk = h5file.get_node('/FitParams/kmax').read()
-            maxl = h5file.get_node('/FitParams/lmax').read()
-            cap_lim = h5file.get_node('/FitParams/cap_lim').read()
+            # maxk = h5file.get_node('/FitParams/kmax').read()
+            # maxl = h5file.get_node('/FitParams/lmax').read()
+            # cap_lim = h5file.get_node('/FitParams/cap_lim').read()
 
-            self.cent_point = h5file.get_node('/FitParams/center_point')[:]
+            # self.cent_point = h5file.get_node('/FitParams/center_point')[:]
             self.hull_v = h5file.get_node('/FitParams/hull_verticies')[:]
 
             self.config_file_text = h5file.get_node('/ConfigFile/Contents').read()
@@ -142,29 +148,35 @@ class EvalParam(Model):
 
         C, dC = self.get_C(time)
 
-        out = self.eval_model(R0,C)
-        parameter = out['param']
-        parameter[~check] = np.nan
-        P = parameter
+        # use einsum to retain shape of input arrays correctly
+        A = self.model.eval_basis(R0)
+        parameter = np.reshape(np.dot(A,C),np.shape(A)[0])
 
-        if calcgrad:
-            gradient = out['grad']
-            gradient = self.inverse_transform(R,gradient)
-            gradient[~check] = [np.nan,np.nan,np.nan]
-            dP = np.array([gradient[:,0],gradient[:,1],gradient[:,2],np.zeros(len(parameter))]).T
-            return P, dP
+        return parameter
 
-        if calcerr:
-            err = out['err']
-            err[~check] = np.nan
-            if calcgrad:
-                graderr = out['gerr']
-                graderr = self.inverse_transform(R,graderr,self.cp)
-                graderr[~check] = [np.nan,np.nan,np.nan]
-            return P, dP, err, graderr
-
-        else:
-            return P.reshape(tuple(list(Rshape)[1:]))
+        # out = self.eval_model(R0,C)
+        # parameter = out['param']
+        # parameter[~check] = np.nan
+        # P = parameter
+        #
+        # if calcgrad:
+        #     gradient = out['grad']
+        #     gradient = self.inverse_transform(R,gradient)
+        #     gradient[~check] = [np.nan,np.nan,np.nan]
+        #     dP = np.array([gradient[:,0],gradient[:,1],gradient[:,2],np.zeros(len(parameter))]).T
+        #     return P, dP
+        #
+        # if calcerr:
+        #     err = out['err']
+        #     err[~check] = np.nan
+        #     if calcgrad:
+        #         graderr = out['gerr']
+        #         graderr = self.inverse_transform(R,graderr,self.cp)
+        #         graderr[~check] = [np.nan,np.nan,np.nan]
+        #     return P, dP, err, graderr
+        #
+        # else:
+        #     return P.reshape(tuple(list(Rshape)[1:]))
 
 
 
@@ -291,6 +303,7 @@ class EvalParam(Model):
                 covariance matrix
         """
 
+        print(t)
         # find unix time of requested point
         t0 = (t-dt.datetime.utcfromtimestamp(0)).total_seconds()
 

@@ -65,13 +65,16 @@ class Model(object):
 
         self.eval_reg_matricies = {'curvature':self.eval_omega,'0thorder':self.eval_psi}
 
+    # clean up/formalize how config files are read
     def read_config(self, config_file):
         # read config file
         config = configparser.ConfigParser()
-        config.read(config_file)
+        config.read_file(config_file)
 
         self.maxk = eval(config.get('MODEL','MAXK'))
         self.maxl = eval(config.get('MODEL','MAXL'))
+        self.latcp = eval(config.get('MODEL','LATCP'))
+        self.loncp = eval(config.get('MODEL','LONCP'))
         self.cap_lim = eval(config.get('MODEL','CAP_LIM'))
         self.max_z_int = float(eval(config.get('MODEL','MAX_Z_INT')))
 
@@ -417,14 +420,14 @@ class Model(object):
         r, t, p = cc.geodetic_to_spherical(R0[0], R0[1], R0[2])
         R0 = np.array([r, t, p])
 
-        try:
-            phi0 = self.cp[1]
-            theta0 = self.cp[0]
-        except:
-            phi0 = np.average(R0[2])
-            theta0 = -1*np.average(R0[1])
-            self.cp = [theta0,phi0]
-
+        # try:
+        #     phi0 = self.cp[1]
+        #     theta0 = self.cp[0]
+        # except:
+        #     phi0 = np.average(R0[2])
+        #     theta0 = -1*np.average(R0[1])
+        #     self.cp = [theta0,phi0]
+        theta0, phi0, _ = cc.geodetic_to_spherical(self.latcp,self.loncp,0.)
 
         k = np.array([np.cos(phi0+np.pi/2.),np.sin(phi0+np.pi/2.),0.])
 
