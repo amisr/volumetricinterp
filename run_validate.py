@@ -11,7 +11,7 @@ import matplotlib.gridspec as gridspec
 import cartopy.crs as ccrs
 
 from Fit import Fit
-from EvalParam import EvalParam
+from Evaluate import Evaluate
 
 def interp(starttime, endtime):
     from argparse import ArgumentParser, RawDescriptionHelpFormatter
@@ -50,7 +50,7 @@ def validate(targtime, altitude, altlim=30.):
     # lat_coords = {'RISR-N':np.linspace(74., 80., 10), 'RISR-C':np.linspace(69., 75.,10)}
     # lon_coords = {'RISR-N':np.linspace(260., 285., 10), 'RISR-C':np.linspace(250., 270., 10)}
 
-    eval = EvalParam('test_out.h5')
+    eval = Evaluate('test_out.h5')
     # print(eval.model.latcp, eval.model.loncp)
 
     # set input coordinates

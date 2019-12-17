@@ -1,4 +1,4 @@
-# EvalParam.py
+# Evaluate.py
 
 import numpy as np
 import datetime as dt
@@ -12,7 +12,7 @@ import importlib
 # from Model import Model
 
 # change name to evaluate?
-class EvalParam(object):
+class Evaluate(object):
     """
     This class evaluates the 3D analytic model that is used to describe density and temperature within an AMISR FoV.
     It handles a lot of the nitty-gritty coordinate transformations and loading coefficients from file that are nessisary before the model is evaluated.
