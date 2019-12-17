@@ -4,7 +4,8 @@ import numpy as np
 import scipy.special as sp
 import scipy.integrate
 import configparser
-import coord_convert as cc  # replace all instances of this with pymap3d
+# import coord_convert as cc  # replace all instances of this with pymap3d
+import pymap3d as pm
 
 RE = 6371.2*1000.           # Earth Radius (m)
 
@@ -12,6 +13,7 @@ RE = 6371.2*1000.           # Earth Radius (m)
 # must provide Model class
 # Model class must provide basis and grad_basis methods - take input in geodetic coordinates
 # Model class should be initialized with a config file object that contains all parameters needed to initialize Model (max # basis, centers, ect.)
+# other modules assume this module can handle multidimensional arrays, so if there needs to be any flattening/reforming, do it internally
 
 # Adapt model to fit for time as well
 class Model(object):
@@ -428,7 +430,8 @@ class Model(object):
         """
 
         # r, t, p = cc.geodetic_to_spherical(R0[0], R0[1], R0[2])
-        r, t, p = cc.geodetic_to_spherical(gdlat, gdlon, gdalt)
+        # r, t, p = cc.geodetic_to_spherical(gdlat, gdlon, gdalt)
+
         # R0 = np.array([r, t, p])
 
         # try:
@@ -438,16 +441,24 @@ class Model(object):
         #     phi0 = np.average(R0[2])
         #     theta0 = -1*np.average(R0[1])
         #     self.cp = [theta0,phi0]
-        theta0, phi0, _ = cc.geodetic_to_spherical(self.latcp,self.loncp,0.)
+        # theta0, phi0, _ = cc.geodetic_to_spherical(self.latcp,self.loncp,0.)
+        x0, y0, z0 = pm.geodetic2ecef(self.latcp,self.loncp,0.)
+        theta0 = np.arccos(z0/np.sqrt(x0**2+y0**2+z0**2))
+        phi0 = np.arctan2(y0,x0)
 
         k = np.array([np.cos(phi0+np.pi/2.),np.sin(phi0+np.pi/2.),0.])
 
         # x, y, z = cc.spherical_to_cartesian(R0[0],R0[1],R0[2])
-        x, y, z = cc.spherical_to_cartesian(r,t,p)
+        # x, y, z = cc.spherical_to_cartesian(r,t,p)
+        x, y, z = pm.geodetic2ecef(gdlat, gdlon, gdalt)
         Rp = np.array([x,y,z])
         # print(Rp.shape, theta0.shape, phi0.shape, k.shape)
         Rr = np.array([R*np.cos(theta0)+np.cross(k,R)*np.sin(theta0)+k*np.dot(k,R)*(1-np.cos(theta0)) for R in Rp.T]).T
-        r, t, p = cc.cartesian_to_spherical(Rr[0],Rr[1],Rr[2])
+
+        r = np.sqrt(Rr[0]**2+Rr[1]**2+Rr[2]**2)
+        t = np.arccos(Rr[2]/r)
+        p = np.arctan2(Rr[1],Rr[0])
+        # r, t, p = cc.cartesian_to_spherical(Rr[0],Rr[1],Rr[2])
         # R_trans = np.array([100*(r/RE-1),t,p])
         #
         # return R_trans, self.cp

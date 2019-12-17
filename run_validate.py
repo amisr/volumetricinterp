@@ -26,7 +26,7 @@ def interp(starttime, endtime):
     fit.fit(starttime=starttime, endtime=endtime)
     fit.saveh5()
 
-def validate(targtime, altitude, altlim=30.):
+def validate(targtime, altitude):
     """
     Creates a basic map of the volumetric reconstruction with the original data at a particular altitude slice to confirm that the reconstruction is reasonable.
     This function is designed to fit and plot only a small subset of an experiment (between starttime and endtime) so that it can be used to fine-tune parameters
@@ -95,7 +95,7 @@ def validate(targtime, altitude, altlim=30.):
         raw_dens = f['FittedParams/Ne'][tidx,:,:]
 
     # find index closeset to the projection altitude
-    aidx = np.nanargmin(np.abs(raw_alt-altitude*1000.),axis=1)
+    aidx = np.nanargmin(np.abs(raw_alt-altitude),axis=1)
     # print(aidx)
 
     raw_lat = raw_lat[tuple(np.arange(raw_alt.shape[0])),tuple(aidx)]
@@ -142,7 +142,7 @@ def main():
     #
     # dayfit = Fit('config.ini')
     interp(st,et)
-    validate(targtime, 350.)
+    validate(targtime, 350.*1000.)
 
 
 if __name__ == '__main__':

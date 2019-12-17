@@ -721,7 +721,7 @@ class Fit(object):
         # R0 = np.array([r,t,p])
         # R0 = np.array([latitude, longitude, altitude/1000.])
 
-        return utime, latitude, longitude, altitude/1000., value, error
+        return utime, latitude, longitude, altitude, value, error
 
 
 
