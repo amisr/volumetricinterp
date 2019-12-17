@@ -13,7 +13,7 @@ import cartopy.crs as ccrs
 from Fit import Fit
 from EvalParam import EvalParam
 
-def interp():
+def interp(starttime, endtime):
     from argparse import ArgumentParser, RawDescriptionHelpFormatter
 
     # Build the argument parser tree
@@ -23,7 +23,7 @@ def interp():
     args = vars(parser.parse_args())
 
     fit = Fit(args['config_file'])
-    fit.fit()
+    fit.fit(starttime=starttime, endtime=endtime)
     fit.saveh5()
 
 def validate(targtime, altitude, altlim=30.):
@@ -51,20 +51,20 @@ def validate(targtime, altitude, altlim=30.):
     # lon_coords = {'RISR-N':np.linspace(260., 285., 10), 'RISR-C':np.linspace(250., 270., 10)}
 
     eval = EvalParam('test_out.h5')
-    print(eval.model.latcp, eval.model.loncp)
+    # print(eval.model.latcp, eval.model.loncp)
 
     # set input coordinates
     latn, lonn = np.meshgrid(np.linspace(74., 80., 10), np.linspace(260., 285., 10))
     altn = np.full(latn.shape, altitude)
-    R0n = np.array([latn, lonn, altn])
+    # R0n = np.array([latn, lonn, altn])
 
-    Rshape = R0n.shape
-    R0 = R0n.reshape(Rshape[0], -1)
+    # Rshape = R0n.shape
+    # R0 = R0n.reshape(Rshape[0], -1)
 
     map_proj = ccrs.LambertConformal(central_latitude=eval.model.latcp, central_longitude=eval.model.loncp)
     denslim = [0., 3.e11]
 
-    dens = eval.getparam(targtime,R0)
+    dens = eval.getparam(targtime,latn.flatten(), lonn.flatten(), altn.flatten())
     dens = dens.reshape(latn.shape)
     # print(dens)
 
@@ -81,6 +81,8 @@ def validate(targtime, altitude, altlim=30.):
         # raw_lat = f['Geomag/Latitude'][:]
         # raw_lon = f['Geomag/Longitude'][:]
 
+    # print(raw_filename, targtime)
+
     with h5py.File(raw_filename, 'r') as f:
         raw_alt = f['/Geomag/Altitude'][:]
 
@@ -89,7 +91,7 @@ def validate(targtime, altitude, altlim=30.):
         raw_lon = f['/Geomag/Longitude'][:]
 
         utime = f['Time/UnixTime'][:]
-        tidx = np.argmin(np.abs(utime-utargtime))
+        tidx = np.argmin(np.abs(np.mean(utime,axis=1)-utargtime))
         raw_dens = f['FittedParams/Ne'][tidx,:,:]
 
     # find index closeset to the projection altitude
@@ -134,11 +136,12 @@ def validate(targtime, altitude, altlim=30.):
 
 def main():
 
-    targtime = dt.datetime(2017,11,19,0,4,11)
-    # et = dt.datetime(2017,11,21,18,50)
+    targtime = dt.datetime(2017,11,21,18,46)
+    st = dt.datetime(2017,11,21,18,40)
+    et = dt.datetime(2017,11,21,18,50)
     #
     # dayfit = Fit('config.ini')
-    interp()
+    interp(st,et)
     validate(targtime, 350.)
 
 

@@ -9,7 +9,7 @@ import scipy.special as sp
 from scipy.spatial import ConvexHull
 import tables
 import importlib
-import coord_convert as cc
+# import coord_convert as cc
 import os
 
 # from Model import Model
@@ -534,7 +534,7 @@ class Fit(object):
             reg_matricies[reg] = self.model.eval_reg_matricies[reg]()
 
         # read data from AMISR fitted file
-        utime, R0, value, error = self.get_data(self.filename)
+        utime, lat, lon, alt, value, error = self.get_data(self.filename)
 
         # if a starttime and endtime are given, rewrite utime, value, and error arrays so
         #   they only contain records between those two times
@@ -544,25 +544,28 @@ class Fit(object):
             value = value[idx]
             error = error[idx]
 
-        # Find convex hull of original data set
-        verticies = self.compute_hull(R0)
+        # # Find convex hull of original data set
+        # verticies = self.compute_hull(R0)
 
         # # Transform coordinates
         # R0, cp = self.model.transform_coord(R00)
 
         # loop over every record and calculate the coefficients
         # if modeling time variation, this loop will change?
-        for ut, ne0, er0 in zip(utime[:10], value[:10], error[:10]):
+        for ut, ne0, er0 in zip(utime, value, error):
             print(dt.datetime.utcfromtimestamp(ut[0]))
 
-            R = R0[:,np.isfinite(ne0)]
+            # R = R0[:,np.isfinite(ne0)]
+            lat0 = lat[np.isfinite(ne0)]
+            lon0 = lon[np.isfinite(ne0)]
+            alt0 = alt[np.isfinite(ne0)]
             er0 = er0[np.isfinite(ne0)]
             ne0 = ne0[np.isfinite(ne0)]
 
             # define matricies
             W = np.array(er0**(-2))[:,None]
             b = ne0[:,None]
-            A = self.model.eval_basis(R)
+            A = self.model.basis(lat0, lon0, alt0)
 
 
             # # Evaluate Tau regularization matrix - this is based on data and must be in loop
@@ -618,7 +621,7 @@ class Fit(object):
         self.Covariance = np.array(Covariance)
         self.chi_sq = np.array(chi_sq)
         # self.cent_point = cp
-        self.hull_v = verticies
+        # self.hull_v = verticies
         # self.raw_coords = R00
         # self.raw_data = value
         # self.raw_error = error
@@ -716,9 +719,9 @@ class Fit(object):
         # Convert input coordinates to geocentric-spherical
         # r, t, p = cc.geodetic_to_spherical(latitude,longitude,altitude/1000.)
         # R0 = np.array([r,t,p])
-        R0 = np.array([latitude, longitude, altitude/1000.])
+        # R0 = np.array([latitude, longitude, altitude/1000.])
 
-        return utime, R0, value, error
+        return utime, latitude, longitude, altitude/1000., value, error
 
 
 
@@ -754,7 +757,7 @@ class Fit(object):
 #             h5out.create_array(fgroup, 'regscalefac', self.reg_scale_factor)
             h5out.create_array(fgroup, 'chi2', self.chi_sq)
             # h5out.create_array(fgroup, 'center_point', self.cent_point)
-            h5out.create_array(fgroup, 'hull_verticies', self.hull_v)
+            # h5out.create_array(fgroup, 'hull_verticies', self.hull_v)
 
             h5out.create_array(dgroup, 'filename', self.raw_filename.encode('utf-8'))
             # h5out.create_array(dgroup, 'coordinates', self.raw_coords)
@@ -955,21 +958,21 @@ class Fit(object):
 #         plt.show()
 
 
-    def maps(self):
-
-        self.timeinterp = False
-        time = np.array([dt.datetime.utcfromtimestamp(t) for t in self.time[:,1]])
-
-        # define an input lat/lon grid
-        latrange = np.linspace(70.,80.,50)
-        lonrange = np.linspace(-100.,-80.,50)
-        latitude, longitude = np.meshgrid(latrange,lonrange)
-        altitude = np.full(latitude.shape, 300.)
-
-        # Convert input coordinates to geocentric-spherical
-        r, t, p = cc.geodetic_to_spherical(latitude,longitude,altitude)
-        R0 = np.array([r,t,p])
-
-        for t in time:
-            ne = self.getparam(t,R0)
-            print(ne[np.isfinite(ne)])
+    # def maps(self):
+    #
+    #     self.timeinterp = False
+    #     time = np.array([dt.datetime.utcfromtimestamp(t) for t in self.time[:,1]])
+    #
+    #     # define an input lat/lon grid
+    #     latrange = np.linspace(70.,80.,50)
+    #     lonrange = np.linspace(-100.,-80.,50)
+    #     latitude, longitude = np.meshgrid(latrange,lonrange)
+    #     altitude = np.full(latitude.shape, 300.)
+    #
+    #     # Convert input coordinates to geocentric-spherical
+    #     r, t, p = cc.geodetic_to_spherical(latitude,longitude,altitude)
+    #     R0 = np.array([r,t,p])
+    #
+    #     for t in time:
+    #         ne = self.getparam(t,R0)
+    #         print(ne[np.isfinite(ne)])

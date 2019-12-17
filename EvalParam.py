@@ -4,7 +4,7 @@ import numpy as np
 import datetime as dt
 import tables
 from scipy.spatial import ConvexHull
-import coord_convert as cc
+# import coord_convert as cc
 import io
 import configparser
 import importlib
@@ -101,8 +101,8 @@ class EvalParam(object):
             # maxl = h5file.get_node('/FitParams/lmax').read()
             # cap_lim = h5file.get_node('/FitParams/cap_lim').read()
 
-            # self.cent_point = h5file.get_node('/FitParams/center_point')[:]
-            self.hull_v = h5file.get_node('/FitParams/hull_verticies')[:]
+            # # self.cent_point = h5file.get_node('/FitParams/center_point')[:]
+            # self.hull_v = h5file.get_node('/FitParams/hull_verticies')[:]
 
             self.config_file_text = h5file.get_node('/ConfigFile/Contents').read()
 
@@ -114,7 +114,7 @@ class EvalParam(object):
 
 
 #     def getparam(self,R0,calcgrad=True,calcerr=False):
-    def getparam(self,time,R0,calcgrad=False,calcerr=False):
+    def getparam(self,time,gdlat,gdlon,gdalt,calcgrad=False,calcerr=False):
         """
         Fully calculates parameters and their gradients given input coordinates and a time.
         This is the main function that is used to retrieve reconstructed parameters.
@@ -142,14 +142,14 @@ class EvalParam(object):
         """
 
 
-        Rshape = R0.shape
-        R0 = R0.reshape(Rshape[0], -1)
-        check = self.check_hull(R0)
+        # Rshape = R0.shape
+        # R0 = R0.reshape(Rshape[0], -1)
+        # check = self.check_hull(R0)
 
         C, dC = self.get_C(time)
 
         # use einsum to retain shape of input arrays correctly
-        A = self.model.eval_basis(R0)
+        A = self.model.basis(gdlat, gdlon, gdalt)
         parameter = np.reshape(np.dot(A,C),np.shape(A)[0])
 
         return parameter

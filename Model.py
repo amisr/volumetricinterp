@@ -8,6 +8,11 @@ import coord_convert as cc  # replace all instances of this with pymap3d
 
 RE = 6371.2*1000.           # Earth Radius (m)
 
+# custom model modual
+# must provide Model class
+# Model class must provide basis and grad_basis methods - take input in geodetic coordinates
+# Model class should be initialized with a config file object that contains all parameters needed to initialize Model (max # basis, centers, ect.)
+
 # Adapt model to fit for time as well
 class Model(object):
     # TODO: update docstring
@@ -120,7 +125,7 @@ class Model(object):
         return v
 
 
-    def eval_basis(self,R):
+    def basis(self, gdlat, gdlon, gdalt):
         """
         Calculates a matrix of the basis functions evaluated at all input points
 
@@ -136,9 +141,12 @@ class Model(object):
             - Something clever could probably be done to not recalculate the full expression when incrimenting n does not result in a change in k, or similar.
                 All the evaluations of special functions here make it one of the slowest parts of the code.
         """
-        z = R[0]
-        theta = R[1]
-        phi = R[2]
+        # z = R[0]
+        # theta = R[1]
+        # phi = R[2]
+
+        z, theta, phi = self.transform_coord(gdlat, gdlon, gdalt)
+
         A = []
         for n in range(self.nbasis):
             k, l, m = self.basis_numbers(n)
@@ -147,7 +155,7 @@ class Model(object):
         return np.array(A).T
 
 
-    def eval_grad_basis(self,R):
+    def grad_basis(self, gdlat, gdlon, gdalt):
         """
         Calculates a matrix of the gradient of basis functions evaluated at all input points
 
@@ -163,9 +171,11 @@ class Model(object):
             - Something clever could probably be done to not recalculate the full expression when incrimenting n does not result in a change in k, or similar.
                 All the evaluations of special functions here make it one of the slowest parts of the code.
         """
-        z = R[0]
-        theta = R[1]
-        phi = R[2]
+        # z = R[0]
+        # theta = R[1]
+        # phi = R[2]
+        z, theta, phi = self.transform_coord(gdlat, gdlon, gdalt)
+
         Ag = []
         x = np.cos(theta)
         y = np.sin(theta)
@@ -261,78 +271,78 @@ class Model(object):
         return T
 
 
-    # maybe not nessisary?  Move to EvalParam
-    # evaluation of linear models should always be y = A*C, so this should be straightforward
-    # logit of what should/should not be calculated can be handled by EvalParam
-    def eval_model(self,R,C,calcgrad=False,calcerr=False,verbose=False):
-        """
-        Evaluate the density and gradients at the points in R given the coefficients C.
-         If the covarience matrix, dC, is provided, the errors in the density and gradients will be calculated.  If not,
-         just the density and gradient vectors will be returned by default.
-
-        Parameters:
-            R: [ndarray(3,npoints)]
-                array of input coordinates
-                R = [[z coordinates (m)],[theta coordinates (rad)],[phi coordinates (rad)]]
-                if input points are expressed as a list of r,t,p points, eg. points = [[r1,t1,p1],[r2,t2,p2],...], R = np.array(points).T
-            calcgrad: [bool]
-                indicates if gradients should be calculated
-                True (default): gradients WILL be calculated
-                False: gradients WILL NOT be calculated
-                Setting calcgrad=False if gradients are not required may improve efficiency
-            calcerr: [bool]
-                indicates if errors on parameters and gradients should be calculated
-                True: errors WILL be calculated
-                False (default): errors WILL NOT be calculated
-            verbose: [bool]
-                indicates if function should be run in verbose mode
-                This prints a warning if dC is not specified and the errors will not be calculated.
-                True: verbose mode is ON
-                False (default): verbose mode is OFF
-        Returns:
-            out: [dict]
-                dictionary containing calculated parameter, gradient, and error arrays, as appropriate
-                vaild keys:
-                    'param': parameter
-                    'grad': gradient (if calcgrad=True)
-                    'err': error on parameter (if calcerr=True)
-                    'gerr': error on gradient (if calcgrad=True AND calcerr=True)
-        Notes:
-            - A rough framework for error handling has been included in this code, but it has not been used often.
-                The method needs to be validated still and there are probably errors in the code.
-        """
-
-#         if self.C is None:
-#             print 'WARNING: C not specified in Model!'
-
-        R, _ = self.transform_coord(R)
-
-        out = {}
-        A = self.eval_basis(R)
-        parameter = np.reshape(np.dot(A,C),np.shape(A)[0])
-        out['param'] = parameter
-
-        if calcgrad:
-            Ag = self.eval_grad_basis(R)
-#             gradient = np.reshape(np.tensordot(Ag,self.C,axes=1),(np.shape(Ag)[0],np.shape(Ag)[1]))
-            gradient = np.reshape(np.tensordot(Ag,C,axes=1),(np.shape(Ag)[0],np.shape(Ag)[1]))
-            out['grad'] = gradient
-
-        if calcerr:
-            if self.dC is None:
-                if verbose:
-                    print('Covariance matrix not provided. Errors will not be calculated.')
-            error = np.diag(np.squeeze(np.dot(A,np.dot(self.dC,A.T))))
-            out['err'] = error
-
-            if calcgrad:
-                gradmat = np.tensordot(Ag,np.tensordot(self.dC,Ag.T,axes=1),axes=1)
-                graderr = []
-                for i in range(np.shape(gradmat)[0]):
-                    graderr.append(np.diag(gradmat[i,:,:,i]))
-                graderr = np.array(graderr)
-                out['gerr'] = graderr
-        return out
+#     # maybe not nessisary?  Move to EvalParam
+#     # evaluation of linear models should always be y = A*C, so this should be straightforward
+#     # logit of what should/should not be calculated can be handled by EvalParam
+#     def eval_model(self,R,C,calcgrad=False,calcerr=False,verbose=False):
+#         """
+#         Evaluate the density and gradients at the points in R given the coefficients C.
+#          If the covarience matrix, dC, is provided, the errors in the density and gradients will be calculated.  If not,
+#          just the density and gradient vectors will be returned by default.
+#
+#         Parameters:
+#             R: [ndarray(3,npoints)]
+#                 array of input coordinates
+#                 R = [[z coordinates (m)],[theta coordinates (rad)],[phi coordinates (rad)]]
+#                 if input points are expressed as a list of r,t,p points, eg. points = [[r1,t1,p1],[r2,t2,p2],...], R = np.array(points).T
+#             calcgrad: [bool]
+#                 indicates if gradients should be calculated
+#                 True (default): gradients WILL be calculated
+#                 False: gradients WILL NOT be calculated
+#                 Setting calcgrad=False if gradients are not required may improve efficiency
+#             calcerr: [bool]
+#                 indicates if errors on parameters and gradients should be calculated
+#                 True: errors WILL be calculated
+#                 False (default): errors WILL NOT be calculated
+#             verbose: [bool]
+#                 indicates if function should be run in verbose mode
+#                 This prints a warning if dC is not specified and the errors will not be calculated.
+#                 True: verbose mode is ON
+#                 False (default): verbose mode is OFF
+#         Returns:
+#             out: [dict]
+#                 dictionary containing calculated parameter, gradient, and error arrays, as appropriate
+#                 vaild keys:
+#                     'param': parameter
+#                     'grad': gradient (if calcgrad=True)
+#                     'err': error on parameter (if calcerr=True)
+#                     'gerr': error on gradient (if calcgrad=True AND calcerr=True)
+#         Notes:
+#             - A rough framework for error handling has been included in this code, but it has not been used often.
+#                 The method needs to be validated still and there are probably errors in the code.
+#         """
+#
+# #         if self.C is None:
+# #             print 'WARNING: C not specified in Model!'
+#
+#         R, _ = self.transform_coord(R)
+#
+#         out = {}
+#         A = self.eval_basis(R)
+#         parameter = np.reshape(np.dot(A,C),np.shape(A)[0])
+#         out['param'] = parameter
+#
+#         if calcgrad:
+#             Ag = self.eval_grad_basis(R)
+# #             gradient = np.reshape(np.tensordot(Ag,self.C,axes=1),(np.shape(Ag)[0],np.shape(Ag)[1]))
+#             gradient = np.reshape(np.tensordot(Ag,C,axes=1),(np.shape(Ag)[0],np.shape(Ag)[1]))
+#             out['grad'] = gradient
+#
+#         if calcerr:
+#             if self.dC is None:
+#                 if verbose:
+#                     print('Covariance matrix not provided. Errors will not be calculated.')
+#             error = np.diag(np.squeeze(np.dot(A,np.dot(self.dC,A.T))))
+#             out['err'] = error
+#
+#             if calcgrad:
+#                 gradmat = np.tensordot(Ag,np.tensordot(self.dC,Ag.T,axes=1),axes=1)
+#                 graderr = []
+#                 for i in range(np.shape(gradmat)[0]):
+#                     graderr.append(np.diag(gradmat[i,:,:,i]))
+#                 graderr = np.array(graderr)
+#                 out['gerr'] = graderr
+#         return out
 
 
     def Az(self,v,m,phi):
@@ -396,7 +406,7 @@ class Model(object):
         return Kvm
 
 
-    def transform_coord(self,R0):
+    def transform_coord(self, gdlat, gdlon, gdalt):
         """
         Transform from spherical coordinates to something friendlier for calculating the basis fit.
         This involves a rotation so that the data is centered around the north pole and a trasformation
@@ -417,8 +427,9 @@ class Model(object):
 
         """
 
-        r, t, p = cc.geodetic_to_spherical(R0[0], R0[1], R0[2])
-        R0 = np.array([r, t, p])
+        # r, t, p = cc.geodetic_to_spherical(R0[0], R0[1], R0[2])
+        r, t, p = cc.geodetic_to_spherical(gdlat, gdlon, gdalt)
+        # R0 = np.array([r, t, p])
 
         # try:
         #     phi0 = self.cp[1]
@@ -431,13 +442,16 @@ class Model(object):
 
         k = np.array([np.cos(phi0+np.pi/2.),np.sin(phi0+np.pi/2.),0.])
 
-        x, y, z = cc.spherical_to_cartesian(R0[0],R0[1],R0[2])
+        # x, y, z = cc.spherical_to_cartesian(R0[0],R0[1],R0[2])
+        x, y, z = cc.spherical_to_cartesian(r,t,p)
         Rp = np.array([x,y,z])
+        # print(Rp.shape, theta0.shape, phi0.shape, k.shape)
         Rr = np.array([R*np.cos(theta0)+np.cross(k,R)*np.sin(theta0)+k*np.dot(k,R)*(1-np.cos(theta0)) for R in Rp.T]).T
         r, t, p = cc.cartesian_to_spherical(Rr[0],Rr[1],Rr[2])
-        R_trans = np.array([100*(r/RE-1),t,p])
-
-        return R_trans, self.cp
+        # R_trans = np.array([100*(r/RE-1),t,p])
+        #
+        # return R_trans, self.cp
+        return 100*(r/RE-1), t, p
 
 
 
