@@ -147,6 +147,8 @@ class Model(object):
         # theta = R[1]
         # phi = R[2]
 
+        # print(gdlat.shape)
+
         z, theta, phi = self.transform_coord(gdlat, gdlon, gdalt)
 
         A = []
@@ -452,8 +454,10 @@ class Model(object):
         # x, y, z = cc.spherical_to_cartesian(r,t,p)
         x, y, z = pm.geodetic2ecef(gdlat, gdlon, gdalt)
         Rp = np.array([x,y,z])
+        # print(Rp.shape)
         # print(Rp.shape, theta0.shape, phi0.shape, k.shape)
         Rr = np.array([R*np.cos(theta0)+np.cross(k,R)*np.sin(theta0)+k*np.dot(k,R)*(1-np.cos(theta0)) for R in Rp.T]).T
+        # print(Rr.shape)
 
         r = np.sqrt(Rr[0]**2+Rr[1]**2+Rr[2]**2)
         t = np.arccos(Rr[2]/r)

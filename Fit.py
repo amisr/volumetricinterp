@@ -97,6 +97,10 @@ class Fit(object):
         self.param = eval(config.get('DEFAULT', 'PARAM'))
         # self.param = AMISR_param(param)
 
+        self.errlim = eval(config.get('DEFAULT', 'ERRLIM'))
+        self.chi2lim = eval(config.get('DEFAULT', 'CHI2LIM'))
+        self.goodfitcode = eval(config.get('DEFAULT', 'GOODFITCODE'))
+
         self.model_name = eval(config.get('MODEL', 'MODEL'))
 
         # maxk = eval(config.get('DEFAULT','MAXK'))
@@ -695,12 +699,20 @@ class Fit(object):
         # TRUE for "GOOD" point; FALSE for "BAD" point
         # A "good" record that shouldn't be removed should be TRUE for EVERY check condition
         ##  MAKE THESE LIMITS CUSTOMIZABLE IN THE CONFIG FILE
-        if self.param == 'dens':
-            data_check = np.array([np.isfinite(error),error>1.e10,fitcode>0,fitcode<5,chi2<10,chi2>0.1])
-        elif 'temp' in self.param:
-            data_check = np.array([np.isfinite(error),fitcode>0,fitcode<5,chi2<10,chi2>0.1])
-        else:
-            data_check = np.array([np.isfinite(value)])
+        # errlim = [1e10,1e13]
+        # goodfitcode = [1,2,3,4]
+        # chi2lim = [0.1,10]
+        # if self.param == 'dens':
+        #     data_check = np.array([np.isfinite(error),error>1.e10,fitcode>0,fitcode<5,chi2<10,chi2>0.1])
+        # elif 'temp' in self.param:
+        #     data_check = np.array([np.isfinite(error),fitcode>0,fitcode<5,chi2<10,chi2>0.1])
+        # else:
+        #     data_check = np.array([np.isfinite(value)])
+
+        # print(error.shape)
+        # print(error, chi2, fitcode)
+
+        data_check = np.array([error>self.errlim[0], error<self.errlim[1], chi2>self.chi2lim[0], chi2<self.chi2lim[1], np.isin(fitcode,self.goodfitcode)])
 
         # If ANY elements of data_check are FALSE, flag index as bad data
         bad_data = np.squeeze(np.any(data_check==False,axis=0,keepdims=True))
@@ -720,6 +732,8 @@ class Fit(object):
         # r, t, p = cc.geodetic_to_spherical(latitude,longitude,altitude/1000.)
         # R0 = np.array([r,t,p])
         # R0 = np.array([latitude, longitude, altitude/1000.])
+
+        # print(utime.shape, latitude.shape, value.shape)
 
         return utime, latitude, longitude, altitude, value, error
 
