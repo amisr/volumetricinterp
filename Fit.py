@@ -12,6 +12,11 @@ import importlib
 import os
 import pymap3d as pm
 
+<<<<<<< HEAD
+=======
+from Model_RBF import Model
+from Param import AMISR_param
+>>>>>>> rbf_model
 
 class Fit(object):
     """
@@ -89,9 +94,28 @@ class Fit(object):
 
         self.param = config.get('DEFAULT', 'PARAM')
 
+<<<<<<< HEAD
         self.errlim = [float(i) for i in config.get('DEFAULT', 'ERRLIM').split(',')]
         self.chi2lim = [float(i) for i in config.get('DEFAULT', 'CHI2LIM').split(',')]
         self.goodfitcode = [int(i) for i in config.get('DEFAULT', 'GOODFITCODE').split(',')]
+=======
+        # maxk = eval(config.get('DEFAULT','MAXK'))
+        # maxl = eval(config.get('DEFAULT','MAXL'))
+        # cap_lim = eval(config.get('DEFAULT','CAP_LIM'))
+        
+        # super().__init__(maxk,maxl,cap_lim)
+        super().__init__()
+        
+        self.regularization_list = eval(config.get('DEFAULT','REGULARIZATION_LIST'))
+        self.reg_method = eval(config.get('DEFAULT','REGULARIZATION_METHOD'))
+        self.max_z_int = float(config.get('DEFAULT','MAX_Z_INT'))
+    
+        self.filename = eval(config.get('DEFAULT','FILENAME'))
+        self.outputfilename = eval(config.get('DEFAULT','OUTPUTFILENAME'))
+                               
+        param = eval(config.get('DEFAULT', 'PARAM'))
+        self.param = AMISR_param(param)
+>>>>>>> rbf_model
 
         self.model_name = config.get('MODEL', 'MODEL')
 
@@ -531,6 +555,17 @@ class Fit(object):
             utime = utime[idx,:]
             value = value[idx]
             error = error[idx]
+<<<<<<< HEAD
+=======
+ 
+        # Find convex hull of original data set
+        verticies = self.compute_hull(R00)
+
+        self.set_model(R00)
+        
+        # Transform coordinates
+        R0 = self.transform_coord(R00)
+>>>>>>> rbf_model
 
         # loop over every record and calculate the coefficients
         # if modeling time variation, this loop will change?
@@ -603,6 +638,14 @@ class Fit(object):
         self.Coeffs = np.array(Coeffs)
         self.Covariance = np.array(Covariance)
         self.chi_sq = np.array(chi_sq)
+<<<<<<< HEAD
+=======
+        # self.cent_point = cp
+        self.hull_v = verticies
+        self.raw_coords = R00
+        self.raw_data = value
+        self.raw_error = error
+>>>>>>> rbf_model
         self.raw_filename = self.filename
 
 
@@ -625,8 +668,85 @@ class Fit(object):
                 error in parameter values
         """
 
+<<<<<<< HEAD
         index_dict = {'frac':0, 'temp':1, 'colfreq':2}
         mass_dict = {'O':16, 'O2':32, 'NO':30, 'N2':28, 'N':14}
+=======
+        import matplotlib.pyplot as plt
+        import matplotlib.gridspec as gridspec
+        import cartopy.crs as ccrs
+
+        self.fit(starttime=starttime, endtime=endtime)
+        
+        lat0, lon0, alt0 = self.raw_coords
+
+        # set input coordinates
+        latn, lonn = np.meshgrid(np.linspace(min(lat0), max(lat0), 50), np.linspace(min(lon0), max(lon0), 50))
+        altn = np.full(latn.shape, altitude)
+        R0n = np.array([latn, lonn, altn])
+
+        Rshape = R0n.shape
+        R0 = R0n.reshape(Rshape[0], -1)
+
+        map_proj = ccrs.LambertConformal(central_latitude=np.mean(lat0), central_longitude=np.mean(lon0))
+        denslim = [0., 3.e11]
+    
+        for i, (rd, C) in enumerate(zip(self.raw_data, self.Coeffs)):
+            out = self.eval_model(R0,C)
+            ne = out['param'].reshape(tuple(list(Rshape)[1:]))
+
+            # create plot
+            fig = plt.figure(figsize=(10,10))
+            ax = fig.add_axes([0.02, 0.1, 0.9, 0.8], projection=map_proj)
+            ax.coastlines()
+            ax.gridlines()
+            ax.set_extent([min(lon0),max(lon0),min(lat0),max(lat0)])
+
+            # plot density contours from RISR
+            c = ax.contourf(lonn, latn, ne, np.linspace(denslim[0],denslim[1],31), extend='both', transform=ccrs.PlateCarree())
+            # c = ax.contourf(lonn, latn, ne, transform=ccrs.PlateCarree())
+            ax.scatter(lon0[np.abs(alt0-altitude)<altlim], lat0[np.abs(alt0-altitude)<altlim], c=rd[np.abs(alt0-altitude)<altlim], vmin=denslim[0], vmax=denslim[1], transform=ccrs.Geodetic())
+
+            cax = fig.add_axes([0.91,0.1,0.03,0.8])
+            cbar = plt.colorbar(c, cax=cax)
+            cbar.set_label(r'Electron Density (m$^{-3}$)')
+
+            plt.savefig('temp{:02d}.png'.format(i))
+            plt.close(fig)
+
+#         self.datetime = time0
+
+#         targtime = (self.datetime-dt.datetime(1970,1,1)).total_seconds()
+
+#         try:
+#             utime = np.array([[(t[0]-dt.datetime.utcfromtimestamp(0)).total_seconds(),(t[1]-dt.datetime.utcfromtimestamp(0)).total_seconds()] for t in self.time])
+#             rec = np.where((targtime >= utime[:,0]) & (targtime < utime[:,1]))[0]
+#             rec = rec[0]
+
+#             self.t = self.time[rec][0]
+#             self.C = self.Coeffs[rec]
+#             self.dC = self.Covariance[rec]
+#             self.hv = self.hull_v[rec].T
+#             self.cp = self.cent_point[rec]
+#             self.rR = self.raw_coords[rec].T
+#             self.rd = self.raw_data[rec]
+#             self.re = self.raw_error[rec]
+
+
+#         except AttributeError:
+#             self.loadh5(raw=True)
+
+
+#         lat, lon, alt = cc.spherical_to_geodetic(self.hv.T[0],self.hv.T[1],self.hv.T[2])
+#         latrange = np.linspace(min(lat),max(lat),50)
+#         lonrange = np.linspace(min(lon),max(lon),50)
+#         altrange = np.linspace(min(alt),max(alt),50)
+
+#         cent_lat = (min(lat)+max(lat))/2.
+#         cent_lon = (min(lon)+max(lon))/2.
+#         height = (max(lat)-min(lat))*np.pi/180.*(RE+altitude)
+#         width = (max(lon)-min(lon))*np.pi/180.*(RE+altitude)*np.cos(cent_lat*np.pi/180.)
+>>>>>>> rbf_model
 
         with tables.open_file(filename,'r') as h5file:
 
