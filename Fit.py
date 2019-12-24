@@ -9,14 +9,10 @@ import scipy.special as sp
 from scipy.spatial import ConvexHull
 import tables
 import importlib
-# import coord_convert as cc
 import os
+import pymap3d as pm
 
-# from Model import Model
-# from Param import AMISR_param
 
-# make Model an attribute of class instead of inhereted
-# this  will let which model to use be defined in the config file
 class Fit(object):
     """
     This class performs the least-squares fit of the data to the 3D analytic model to find the coefficient vector for the model.
@@ -77,8 +73,6 @@ class Fit(object):
         self.configfile = config_file
         self.read_config(self.configfile)
 
-        # print(self.model_name)
-        # from self.model_name import Model
         m = importlib.import_module(self.model_name)
         self.model = m.Model(open(self.configfile))
 
@@ -87,27 +81,20 @@ class Fit(object):
         config = configparser.ConfigParser()
         config.read_file(open(config_file))
 
-        self.regularization_list = eval(config.get('DEFAULT','REGULARIZATION_LIST'))
-        self.reg_method = eval(config.get('DEFAULT','REGULARIZATION_METHOD'))
-        # self.max_z_int = float(config.get('DEFAULT','MAX_Z_INT'))
+        self.regularization_list = config.get('DEFAULT','REGULARIZATION_LIST').split(',')
+        self.reg_method = config.get('DEFAULT','REGULARIZATION_METHOD')
 
-        self.filename = eval(config.get('DEFAULT','FILENAME'))
-        self.outputfilename = eval(config.get('DEFAULT','OUTPUTFILENAME'))
+        self.filename = config.get('DEFAULT','FILENAME')
+        self.outputfilename = config.get('DEFAULT','OUTPUTFILENAME')
 
-        self.param = eval(config.get('DEFAULT', 'PARAM'))
-        # self.param = AMISR_param(param)
+        self.param = config.get('DEFAULT', 'PARAM')
 
-        self.errlim = eval(config.get('DEFAULT', 'ERRLIM'))
-        self.chi2lim = eval(config.get('DEFAULT', 'CHI2LIM'))
-        self.goodfitcode = eval(config.get('DEFAULT', 'GOODFITCODE'))
+        self.errlim = [float(i) for i in config.get('DEFAULT', 'ERRLIM').split(',')]
+        self.chi2lim = [float(i) for i in config.get('DEFAULT', 'CHI2LIM').split(',')]
+        self.goodfitcode = [int(i) for i in config.get('DEFAULT', 'GOODFITCODE').split(',')]
 
-        self.model_name = eval(config.get('MODEL', 'MODEL'))
+        self.model_name = config.get('MODEL', 'MODEL')
 
-        # maxk = eval(config.get('DEFAULT','MAXK'))
-        # maxl = eval(config.get('DEFAULT','MAXL'))
-        # cap_lim = eval(config.get('DEFAULT','CAP_LIM'))
-        #
-        # super().__init__(maxk,maxl,cap_lim)
 
 
 
@@ -436,7 +423,7 @@ class Fit(object):
 
         return reg_param
 
-    def compute_hull(self,R0):
+    def compute_hull(self,lat,lon,alt):
         """
         Compute the convex hull that contains the original data.  This is nessisary to check if points requested from the
          model are within the vaild range of where the data constrains the model.
@@ -453,16 +440,17 @@ class Fit(object):
             - hv is also saved as an attribute of the class
         """
 
-        x, y, z = cc.geodetic_to_cartesian(R0[0],R0[1],R0[2])
+        # x, y, z = cc.geodetic_to_cartesian(R0[0],R0[1],R0[2])
+        x, y, z = pm.geodetic2ecef(lat, lon, alt)
         R_cart = np.array([x,y,z]).T
 
         chull = ConvexHull(R_cart)
-        vert = R_cart[chull.vertices]
+        self.hull_vert = R_cart[chull.vertices]
 
-        lat, lon, alt = cc.cartesian_to_geodetic(vert.T[0],vert.T[1],vert.T[2])
-        self.hv = np.array([lat, lon, alt]).T
-
-        return self.hv
+        # lat, lon, alt = cc.cartesian_to_geodetic(vert.T[0],vert.T[1],vert.T[2])
+        # self.hull_verticies = np.array([lat, lon, alt]).T
+        #
+        # return self.hull_verticies
 
 
 
@@ -494,14 +482,7 @@ class Fit(object):
         AWA = np.dot(A.T,W*A)
         X = np.dot(A.T,W*A)
         y = np.dot(A.T,W*b)
-        # generalize this more
-        # user should be able to specify any model and regularization method
-        # if provided model doesn't include methods for computing those regularization matricies, raise error
-        # if 'curvature' in self.regularization_list:
-        #     X = X + reg_params['curvature']*reg_matrices['Omega']
-        # if '0thorder' in self.regularization_list:
-        #     X = X + reg_params['0thorder']*reg_matrices['Psi']
-        #     y = y + reg_params['0thorder']*reg_matrices['Tau']
+
         for reg in self.regularization_list:
             X = X + reg_params[reg]*reg_matrices[reg]
         C = np.squeeze(scipy.linalg.lstsq(X,y,overwrite_a=True,overwrite_b=True)[0])
@@ -529,16 +510,19 @@ class Fit(object):
 
         print('Evaluating Regularization matricies.  This may take a few minutes.')
         reg_matricies = {}
-        # if 'curvature' in self.regularization_list:
-        #     reg_matrices['Omega'] = self.eval_omega()
-        # if '0thorder' in self.regularization_list:
-        #     reg_matrices['Psi'] = self.eval_psi()
-
         for reg in self.regularization_list:
-            reg_matricies[reg] = self.model.eval_reg_matricies[reg]()
+            try:
+                reg_matricies[reg] = self.model.eval_reg_matricies[reg]()
+            except KeyError as e:
+                print('WARNING: The model {} does not support {} regularization!'.format(self.model_name,reg))
+                print('If you would like to use {} regularization, please modify {}.py so that it includes functions to calculate the appropriate regularization matrix.'.format(reg,self.model_name))
+                raise e
 
         # read data from AMISR fitted file
         utime, lat, lon, alt, value, error = self.get_data(self.filename)
+
+        # compute hull that surrounds data
+        self.compute_hull(lat, lon, alt)
 
         # if a starttime and endtime are given, rewrite utime, value, and error arrays so
         #   they only contain records between those two times
@@ -548,18 +532,13 @@ class Fit(object):
             value = value[idx]
             error = error[idx]
 
-        # # Find convex hull of original data set
-        # verticies = self.compute_hull(R0)
-
-        # # Transform coordinates
-        # R0, cp = self.model.transform_coord(R00)
-
         # loop over every record and calculate the coefficients
         # if modeling time variation, this loop will change?
         for ut, ne0, er0 in zip(utime, value, error):
             print(dt.datetime.utcfromtimestamp(ut[0]))
 
-            # R = R0[:,np.isfinite(ne0)]
+            # remove any points with NaN values
+            # Any NaN in the input value array will result in all fit coefficients being NaN
             lat0 = lat[np.isfinite(ne0)]
             lon0 = lon[np.isfinite(ne0)]
             alt0 = alt[np.isfinite(ne0)]
@@ -624,11 +603,6 @@ class Fit(object):
         self.Coeffs = np.array(Coeffs)
         self.Covariance = np.array(Covariance)
         self.chi_sq = np.array(chi_sq)
-        # self.cent_point = cp
-        # self.hull_v = verticies
-        # self.raw_coords = R00
-        # self.raw_data = value
-        # self.raw_error = error
         self.raw_filename = self.filename
 
 
@@ -698,20 +672,6 @@ class Fit(object):
         # Each column correpsonds to a different "check" condition
         # TRUE for "GOOD" point; FALSE for "BAD" point
         # A "good" record that shouldn't be removed should be TRUE for EVERY check condition
-        ##  MAKE THESE LIMITS CUSTOMIZABLE IN THE CONFIG FILE
-        # errlim = [1e10,1e13]
-        # goodfitcode = [1,2,3,4]
-        # chi2lim = [0.1,10]
-        # if self.param == 'dens':
-        #     data_check = np.array([np.isfinite(error),error>1.e10,fitcode>0,fitcode<5,chi2<10,chi2>0.1])
-        # elif 'temp' in self.param:
-        #     data_check = np.array([np.isfinite(error),fitcode>0,fitcode<5,chi2<10,chi2>0.1])
-        # else:
-        #     data_check = np.array([np.isfinite(value)])
-
-        # print(error.shape)
-        # print(error, chi2, fitcode)
-
         data_check = np.array([error>self.errlim[0], error<self.errlim[1], chi2>self.chi2lim[0], chi2<self.chi2lim[1], np.isin(fitcode,self.goodfitcode)])
 
         # If ANY elements of data_check are FALSE, flag index as bad data
@@ -727,13 +687,6 @@ class Fit(object):
         longitude = longitude[np.isfinite(altitude)]
         altitude = altitude[np.isfinite(altitude)]
 
-
-        # Convert input coordinates to geocentric-spherical
-        # r, t, p = cc.geodetic_to_spherical(latitude,longitude,altitude/1000.)
-        # R0 = np.array([r,t,p])
-        # R0 = np.array([latitude, longitude, altitude/1000.])
-
-        # print(utime.shape, latitude.shape, value.shape)
 
         return utime, latitude, longitude, altitude, value, error
 
@@ -759,24 +712,13 @@ class Fit(object):
             h5out.create_array(cgroup, 'C', self.Coeffs)
             h5out.create_array(cgroup, 'dC', self.Covariance)
 
-            # these are model specific parameters that are loaded from config file
-            # just save the config file?
-            # somehow automatically initialize Model in Evaluate?
-            # h5out.create_array(fgroup, 'kmax', self.maxk)
-            # h5out.create_array(fgroup, 'lmax', self.maxl)
-            # h5out.create_array(fgroup, 'cap_lim', self.cap_lim*180./np.pi)
-
             h5out.create_array(fgroup, 'reglist', self.regularization_list)
             h5out.create_array(fgroup, 'regmethod', self.reg_method.encode('utf-8'))
-#             h5out.create_array(fgroup, 'regscalefac', self.reg_scale_factor)
             h5out.create_array(fgroup, 'chi2', self.chi_sq)
-            # h5out.create_array(fgroup, 'center_point', self.cent_point)
-            # h5out.create_array(fgroup, 'hull_verticies', self.hull_v)
+
+            h5out.create_array(fgroup, 'hull_vert', self.hull_vert)
 
             h5out.create_array(dgroup, 'filename', self.raw_filename.encode('utf-8'))
-            # h5out.create_array(dgroup, 'coordinates', self.raw_coords)
-            # h5out.create_array(dgroup, 'data', self.raw_data)
-            # h5out.create_array(dgroup, 'error', self.raw_error)
 
             # config file
             Path = os.path.dirname(os.path.abspath(self.configfile))
@@ -788,205 +730,3 @@ class Fit(object):
             h5out.create_array('/ConfigFile', 'Name', Name.encode('utf-8'))
             h5out.create_array('/ConfigFile', 'Path', Path.encode('utf-8'))
             h5out.create_array('/ConfigFile', 'Contents', Contents.encode('utf-8'))
-
-
-
-# # move this function to a seperate script
-#     def validate(self,starttime, endtime, altitude, altlim=30.):
-#         """
-#         Creates a basic map of the volumetric reconstruction with the original data at a particular altitude slice to confirm that the reconstruction is reasonable.
-#         This function is designed to fit and plot only a small subset of an experiment (between starttime and endtime) so that it can be used to fine-tune parameters
-#         without waiting for an entire experiment to be processed
-#
-#         Parameters:
-#             starttime: [datetime]
-#                 start of interval to validate
-#             endtime: [datetime]
-#                 end of interval to validate
-#             altitude: [float]
-#                 altitude of the slice
-#             altlim: [float]
-#                 points that fall +/- altlim from altitude will be plotted on top of reconstructed contours as scatter
-#         """
-#
-#         import matplotlib.pyplot as plt
-#         import matplotlib.gridspec as gridspec
-#         import cartopy.crs as ccrs
-#
-#         self.fit(starttime=starttime, endtime=endtime)
-#
-#         lat0, lon0, alt0 = self.raw_coords
-#
-#         # set input coordinates
-#         latn, lonn = np.meshgrid(np.linspace(min(lat0), max(lat0), 50), np.linspace(min(lon0), max(lon0), 50))
-#         altn = np.full(latn.shape, altitude)
-#         R0n = np.array([latn, lonn, altn])
-#
-#         Rshape = R0n.shape
-#         R0 = R0n.reshape(Rshape[0], -1)
-#
-#         map_proj = ccrs.LambertConformal(central_latitude=np.mean(lat0), central_longitude=np.mean(lon0))
-#         denslim = [0., 3.e11]
-#
-#         for i, (rd, C) in enumerate(zip(self.raw_data, self.Coeffs)):
-#             out = self.eval_model(R0,C)
-#             ne = out['param'].reshape(tuple(list(Rshape)[1:]))
-#
-#             # create plot
-#             fig = plt.figure(figsize=(10,10))
-#             ax = fig.add_axes([0.02, 0.1, 0.9, 0.8], projection=map_proj)
-#             ax.coastlines()
-#             ax.gridlines()
-#             ax.set_extent([min(lon0),max(lon0),min(lat0),max(lat0)])
-#
-#             # plot density contours from RISR
-#             c = ax.contourf(lonn, latn, ne, np.linspace(denslim[0],denslim[1],31), extend='both', transform=ccrs.PlateCarree())
-#             ax.scatter(lon0[np.abs(alt0-altitude)<altlim], lat0[np.abs(alt0-altitude)<altlim], c=rd[np.abs(alt0-altitude)<altlim], vmin=denslim[0], vmax=denslim[1], transform=ccrs.Geodetic())
-#
-#             cax = fig.add_axes([0.91,0.1,0.03,0.8])
-#             cbar = plt.colorbar(c, cax=cax)
-#             cbar.set_label(r'Electron Density (m$^{-3}$)')
-#
-#             plt.savefig('temp{:02d}.png'.format(i))
-#             plt.close(fig)
-
-#         self.datetime = time0
-
-#         targtime = (self.datetime-dt.datetime(1970,1,1)).total_seconds()
-
-#         try:
-#             utime = np.array([[(t[0]-dt.datetime.utcfromtimestamp(0)).total_seconds(),(t[1]-dt.datetime.utcfromtimestamp(0)).total_seconds()] for t in self.time])
-#             rec = np.where((targtime >= utime[:,0]) & (targtime < utime[:,1]))[0]
-#             rec = rec[0]
-
-#             self.t = self.time[rec][0]
-#             self.C = self.Coeffs[rec]
-#             self.dC = self.Covariance[rec]
-#             self.hv = self.hull_v[rec].T
-#             self.cp = self.cent_point[rec]
-#             self.rR = self.raw_coords[rec].T
-#             self.rd = self.raw_data[rec]
-#             self.re = self.raw_error[rec]
-
-
-#         except AttributeError:
-#             self.loadh5(raw=True)
-
-
-#         lat, lon, alt = cc.spherical_to_geodetic(self.hv.T[0],self.hv.T[1],self.hv.T[2])
-#         latrange = np.linspace(min(lat),max(lat),50)
-#         lonrange = np.linspace(min(lon),max(lon),50)
-#         altrange = np.linspace(min(alt),max(alt),50)
-
-#         cent_lat = (min(lat)+max(lat))/2.
-#         cent_lon = (min(lon)+max(lon))/2.
-#         height = (max(lat)-min(lat))*np.pi/180.*(RE+altitude)
-#         width = (max(lon)-min(lon))*np.pi/180.*(RE+altitude)*np.cos(cent_lat*np.pi/180.)
-
-
-#         lat, lon = np.meshgrid(latrange,lonrange)
-#         alt = np.ones(np.shape(lat))*altitude
-#         r,t,p = cc.geodetic_to_spherical(lat.ravel(),lon.ravel(),alt.ravel())
-#         R0 = np.array([r,t,p])
-
-#         dens, grad = self.getparam(R0)
-#         dens = dens.reshape(lat.shape)
-#         grad = grad.reshape(lat.shape+(4,))
-
-#         dens[dens<0] = np.nan
-
-
-#         lat2, alt2 = np.meshgrid(latrange,altrange)
-#         lon2 = np.ones(np.shape(lat2))*longitude
-#         r,t,p = cc.geodetic_to_spherical(lat2.ravel(),lon2.ravel(),alt2.ravel())
-#         R02 = np.array([r,t,p])
-
-#         dens2, grad2 = self.getparam(R02)
-#         dens2 = dens2.reshape(lat2.shape)
-#         grad2 = grad2.reshape(lat2.shape+(4,))
-#         dens2[dens2<0] = np.nan
-
-#         lat3d, lon3d, alt3d = cc.spherical_to_geodetic(self.rR.T[0],self.rR.T[1],self.rR.T[2])
-#         dens3d = self.rd
-#         err3d = self.re
-
-# #         print lat3d
-
-#         raw_lat = lat3d[np.where(abs(alt3d-altitude)<10.)]
-#         raw_lon = lon3d[np.where(abs(alt3d-altitude)<10.)]
-#         raw_dens = dens3d[np.where(abs(alt3d-altitude)<10.)]
-
-#         longitude = longitude+360.
-#         raw_lat2 = lat3d[np.where(abs(lon3d-longitude)<1.)]
-#         raw_alt2 = alt3d[np.where(abs(lon3d-longitude)<1.)]
-#         raw_dens2 = dens3d[np.where(abs(lon3d-longitude)<1.)]
-
-
-
-#         # maximum and minimum ne for color scale (in units of 10^11 m^-3)
-#         minv = self.param.vrange[0]
-#         maxv = self.param.vrange[1]
-
-
-#         fig = plt.figure(figsize=(15,5))
-#         cmap = plt.cm.get_cmap('viridis')
-
-#         # ax = fig.add_subplot(131,projection='3d')
-#         # ax.scatter(lat3d,lon3d,alt3d,c=dens3d, s=2.e11/err3d, vmin=minne, vmax=maxne, depthshade=False)
-#         ax = fig.add_subplot(131,projection='3d')
-#         # m = Basemap(projection='aeqd',lat_0=cent_lat,lon_0=cent_lon,llcrnrlon=250,llcrnrlat=65,urcrnrlon=330,urcrnrlat=80,resolution='l')
-#         m = Basemap(projection='aeqd',lat_0=cent_lat,lon_0=cent_lon,width=width,height=height,resolution='l')
-#         ax.add_collection3d(m.drawcoastlines())
-#         # ax.add_collection3d(m.scatter(lon3d,lat3d,alt3d,c=dens3d, s=sum(self.param.vrange)/err3d, latlon=True, vmin=minv, vmax=maxv,cmap=cmap))
-#         ax.add_collection3d(m.scatter(lon3d,lat3d,alt3d,c=dens3d, s=(dens3d/err3d)**2, latlon=True, vmin=minv, vmax=maxv,cmap=cmap))
-#         ax.set_title(self.t.strftime('%Y-%m-%d %H:%M:%S'))
-
-
-#         ax = fig.add_subplot(132)
-#         # m = Basemap(projection='aeqd',lat_0=cent_lat,lon_0=cent_lon,llcrnrlon=250,llcrnrlat=65,urcrnrlon=310,urcrnrlat=81,resolution='l')
-#         m = Basemap(projection='aeqd',lat_0=cent_lat,lon_0=cent_lon,width=width,height=height,resolution='l')
-#         f = m.contourf(lon,lat,dens,levels=np.linspace(minv,maxv,100),extend='both',latlon=True,zorder=2,cmap=cmap)
-#         m.scatter(raw_lon,raw_lat,c=raw_dens,vmin=minv,vmax=maxv,s=25,latlon=True,zorder=3,cmap=cmap)
-#         # m.scatter(raw_lon,raw_lat,c=raw_dens,vmin=minv,vmax=maxv,s=2*(dens3d/err3d)**2,latlon=True,zorder=3,cmap=cmap)
-#         u, v, x, y = m.rotate_vector(grad[:,:,2],-1*grad[:,:,1],lon,lat,returnxy=True)
-#         m.quiver(x,y,u,v,zorder=3)
-#         m.plot(lon2[0],lat2[0],latlon=True,zorder=4,color='white')
-#         m.drawcoastlines()
-#         m.drawmapboundary(fill_color='white')
-#         m.drawparallels([60.,70.,80.,90.])
-#         m.drawmeridians(np.arange(-180.,180.,30))
-
-#         ax = fig.add_subplot(133)
-#         f = ax.contourf(lat2,alt2,dens2,levels=np.linspace(minv,maxv,100),extend='both',zorder=2,cmap=cmap)
-#         ax.scatter(raw_lat2,raw_alt2,c=raw_dens2,vmin=minv,vmax=maxv,s=25,zorder=3,cmap=cmap)
-#         # ax.scatter(raw_lat2,raw_alt2,c=raw_dens2,vmin=minv,vmax=maxv,s=2*(dens3d/err3d)**2,zorder=3,cmap=cmap)
-#         ax.quiver(lat2,alt2,-1*grad2[:,:,1],grad2[:,:,0])
-#         ax.plot(lat[0],alt[0],zorder=4,color='white')
-
-
-#         fig.subplots_adjust(left=0.02,right=0.9)
-#         axc = fig.add_axes([0.91,0.15,0.02,0.7])
-#         cbar = fig.colorbar(f,cax=axc)
-#         cbar.set_label(self.param.name+' ('+self.param.units+')')
-
-#         plt.show()
-
-
-    # def maps(self):
-    #
-    #     self.timeinterp = False
-    #     time = np.array([dt.datetime.utcfromtimestamp(t) for t in self.time[:,1]])
-    #
-    #     # define an input lat/lon grid
-    #     latrange = np.linspace(70.,80.,50)
-    #     lonrange = np.linspace(-100.,-80.,50)
-    #     latitude, longitude = np.meshgrid(latrange,lonrange)
-    #     altitude = np.full(latitude.shape, 300.)
-    #
-    #     # Convert input coordinates to geocentric-spherical
-    #     r, t, p = cc.geodetic_to_spherical(latitude,longitude,altitude)
-    #     R0 = np.array([r,t,p])
-    #
-    #     for t in time:
-    #         ne = self.getparam(t,R0)
-    #         print(ne[np.isfinite(ne)])

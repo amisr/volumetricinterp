@@ -4,14 +4,12 @@ import numpy as np
 import datetime as dt
 import tables
 from scipy.spatial import ConvexHull
-# import coord_convert as cc
 import io
 import configparser
 import importlib
+import pymap3d as pm
 
-# from Model import Model
 
-# change name to evaluate?
 class Evaluate(object):
     """
     This class evaluates the 3D analytic model that is used to describe density and temperature within an AMISR FoV.
@@ -47,35 +45,24 @@ class Evaluate(object):
         compute_hull: computes the convex hull that defines where model is valid
         check_hull: checks if the input coordinates are within the convex hull
     """
-#     def __init__(self,datetime=None,radar=None,code=None,param=None,timetol=60.,timeinterp=False):
-    def __init__(self,coeff_filename,timetol=60.,timeinterp=False):
-        # load coefficient file
 
-#         self.datetime = datetime
-#         self.radar = radar
-#         self.code = code
-#         self.param = param
+    def __init__(self,coeff_filename,timetol=60.,timeinterp=False):
+
         self.timetol = timetol
         self.timeinterp = timeinterp
 
+        # load coefficient file
         self.loadh5(filename=coeff_filename)
 
         config_file = io.StringIO(self.config_file_text.decode('utf-8'))
-        # for line in open(config_file,'r'):
-        #     print(line)
 
         config = configparser.ConfigParser()
         config.read_file(config_file)
-        model_name = eval(config.get('MODEL', 'MODEL'))
+        self.model_name = config.get('MODEL', 'MODEL')
 
         config_file.seek(0)
-        m = importlib.import_module(model_name)
+        m = importlib.import_module(self.model_name)
         self.model = m.Model(config_file)
-#         try:
-#             self.loadh5()
-#         except Exception as e:
-#             print e
-            # print 'WARNING: {:04d}{:02d}{:02d}_{}_{}.h5 does not exist! A valid coefficient file must be loaded.'.format(self.datetime.year,self.datetime.month,self.datetime.day,self.radar,self.param.key)
 
 
     def loadh5(self,filename=None,raw=False):
@@ -90,30 +77,19 @@ class Evaluate(object):
                 default is False (raw data will NOT be loaded)
         """
 
-        # TODO: clean up how these are initialized
         with tables.open_file(filename, 'r') as h5file:
             self.Coeffs = h5file.get_node('/Coeffs/C')[:]
             self.Covariance = h5file.get_node('/Coeffs/dC')[:]
 
             self.time = h5file.get_node('/UnixTime')[:]
 
-            # maxk = h5file.get_node('/FitParams/kmax').read()
-            # maxl = h5file.get_node('/FitParams/lmax').read()
-            # cap_lim = h5file.get_node('/FitParams/cap_lim').read()
-
-            # # self.cent_point = h5file.get_node('/FitParams/center_point')[:]
-            # self.hull_v = h5file.get_node('/FitParams/hull_verticies')[:]
+            self.hull_vert = h5file.get_node('/FitParams/hull_vert')[:]
 
             self.config_file_text = h5file.get_node('/ConfigFile/Contents').read()
 
-        # super().__init__(maxk,maxl,cap_lim)
 
 
 
-
-
-
-#     def getparam(self,R0,calcgrad=True,calcerr=False):
     def getparam(self,time,gdlat,gdlon,gdalt,calcgrad=False,calcerr=False):
         """
         Fully calculates parameters and their gradients given input coordinates and a time.
@@ -180,84 +156,9 @@ class Evaluate(object):
 
 
 
-#     def transform_coord(self,R0):
-#         """
-#         Transform from spherical coordinates to something friendlier for calculating the basis fit.
-#         This involves a rotation so that the data is centered around the north pole and a trasformation
-#          of the radial component such that z = 100*(r/RE-1).
-
-#         Parameters:
-#             R0: [ndarray(3,npoints)]
-#                 array of input points in geocentric coordinates
-#                 R = [[r coordinates (m)],[theta coordinates (rad)],[phi coordinates (rad)]]
-#                 if input points are expressed as a list of r,t,p points, eg. points = [[r1,t1,p1],[r2,t2,p2],...], R = np.array(points).T
-#         Returns:
-#             R_trans: [ndarray(3,npoints)]
-#                 array of input points transformed into model coordinates
-#                 R_trans = [[z coordinates],[theta coordinates (rad)],[phi coordinates (rad)]]
-#             cp: [ndarray(2)]
-#                 center point of the input coordinates R0
-#         Notes:
-
-#         """
 
 
-#         try:
-#             phi0 = self.cp[1]
-#             theta0 = self.cp[0]
-#         except:
-#             phi0 = np.average(R0[2])
-#             theta0 = -1*np.average(R0[1])
-#             self.cp = [theta0,phi0]
-
-
-#         k = np.array([np.cos(phi0+np.pi/2.),np.sin(phi0+np.pi/2.),0.])
-
-#         x, y, z = cc.spherical_to_cartesian(R0[0],R0[1],R0[2])
-#         Rp = np.array([x,y,z])
-#         Rr = np.array([R*np.cos(theta0)+np.cross(k,R)*np.sin(theta0)+k*np.dot(k,R)*(1-np.cos(theta0)) for R in Rp.T]).T
-#         r, t, p = cc.cartesian_to_spherical(Rr[0],Rr[1],Rr[2])
-#         R_trans = np.array([100*(r/RE-1),t,p])
-
-#         return R_trans, self.cp
-
-
-
-#     def inverse_transform(self,R0,vec):
-#         """
-#         Inverse transformation to recover the correct vector components at their original position after
-#          calling eval_model().  This is primarially nessisary to get the gradients correct.
-
-#         Parameters:
-#             R0: [ndarray(3,npoints)]
-#                 array of points in model coordinates corresponding to the location of each vector in vec
-#             vec: [ndarray(npoints,3)]
-#                 array of vectors in model coordinates
-#         Returns:
-#             vec_rot: [ndarray(npoints,3)]
-#                 array of vectors rotated back to original geocenteric coordinates
-#         """
-
-#         phi0 = self.cp[1]
-#         theta0 = -1.*self.cp[0]
-
-#         k = np.array([np.cos(phi0+np.pi/2.),np.sin(phi0+np.pi/2.),0.])
-
-#         rx, ry, rz = cc.spherical_to_cartesian((R0[0]/100.+1.)*RE,R0[1],R0[2])
-#         Rc = np.array([rx,ry,rz])
-#         vx, vy, vz = cc.vector_spherical_to_cartesian(vec.T[0],vec.T[1],vec.T[2],(R0[0]/100.+1.)*RE,R0[1],R0[2])
-#         vc = np.array([vx,vy,vz])
-
-#         rr = np.array([R*np.cos(theta0)+np.cross(k,R)*np.sin(theta0)+k*np.dot(k,R)*(1-np.cos(theta0)) for R in Rc.T]).T
-#         vr = np.array([v*np.cos(theta0)+np.cross(k,v)*np.sin(theta0)+k*np.dot(k,v)*(1-np.cos(theta0)) for v in vc.T]).T
-#         vr, vt, vp = cc.vector_cartesian_to_spherical(vr[0],vr[1],vr[2],rr[0],rr[1],rr[2])
-
-#         vec_rot = np.array([vr,vt,vp]).T
-
-#         return vec_rot
-
-
-    def check_hull(self,R0):
+    def check_hull(self,lat0,lon0,alt0):
         """
         Check if the input points R0 are within the convex hull of the original data.
 
@@ -269,19 +170,22 @@ class Evaluate(object):
 
         """
         # x, y, z = cc.spherical_to_cartesian(self.hull_v[:,0],self.hull_v[:,1],self.hull_v[:,2])
-        x, y, z = cc.geodetic_to_cartesian(self.hull_v[:,0],self.hull_v[:,1],self.hull_v[:,2])
-        vert_cart = np.array([x,y,z]).T
+        # x, y, z = cc.geodetic_to_cartesian(self.hull_v[:,0],self.hull_v[:,1],self.hull_v[:,2])
+        # x, y, z = pm.geodetic2ecef(self.hull_vert[:,0],self.hull_v[:,1],self.hull_v[:,2])
+        # vert_cart = np.array([x,y,z]).T
 
-        hull = ConvexHull(vert_cart)
+        hull = ConvexHull(sel.hull_vert)
         check = []
-        for R in R0.T:
+        # for R in R0.T:
+        for lat, lon, alt in zip(lat0, lon0, alt0):
             value = False
 
             # x, y, z = cc.spherical_to_cartesian(R[0],R[1],R[2])
-            x, y, z = cc.geodetic_to_cartesian(R[0],R[1],R[2])
-
+            # x, y, z = cc.geodetic_to_cartesian(R[0],R[1],R[2])
+            x, y, z = pm.geodetic2ecef(lat,lon,alt)
             pnt = np.array([[x,y,z]])
-            pnts = np.append(vert_cart,pnt,axis=0)
+
+            pnts = np.append(self.hull_vert,pnt,axis=0)
             nh = ConvexHull(pnts)
             if np.array_equal(hull.vertices,nh.vertices):
                 value = True
