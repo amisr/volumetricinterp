@@ -3,7 +3,6 @@
 import numpy as np
 import scipy.special as sp
 import scipy.integrate
-# import coord_convert as cc
 import configparser
 import pymap3d as pm
 from scipy.spatial import ConvexHull, Delaunay
@@ -51,13 +50,10 @@ class Model(object):
 
     def __init__(self, config_file):
         self.read_config(config_file)
-        # self.eps = 100000.0
 
-        # basis_centers = np.array([[77., -95.5, 350.], [76., -86., 350.], [78.,-88.5, 350.], [77., -95.5, 350.], [76., -86., 350.], [78.,-88.5, 350.], [77., -95.5, 400.], [76., -86., 400.], [78.,-88.5, 400.]]).T
 
         lat, lon, alt = np.meshgrid(np.linspace(self.latrange[0],self.latrange[1],self.numgridpnt),np.linspace(self.lonrange[0],self.lonrange[1],self.numgridpnt),np.linspace(self.altrange[0],self.altrange[1],self.numgridpnt)*1000.)
 
-        # X, Y, Z = pm.geodetic2ecef(basis_centers[0], basis_centers[1], basis_centers[2])
         X, Y, Z = pm.geodetic2ecef(lat.flatten(), lon.flatten(), alt.flatten())
 
         self.centers = np.array([X,Y,Z]).T
@@ -65,22 +61,14 @@ class Model(object):
 
         self.eval_reg_matricies = {}
 
-        # self.maxk = maxk
-        # self.maxl = maxl
-        # self.nbasis = self.maxk*self.maxl**2
-        # self.cap_lim = cap_lim*np.pi/180.
 
     def read_config(self, config_file):
         # read config file
         config = configparser.ConfigParser()
         config.read_file(config_file)
 
-        # self.maxk = config.getint('MODEL','MAXK')
-        # self.maxl = config.getint('MODEL','MAXL')
         self.latcp = config.getfloat('MODEL','LATCP')
         self.loncp = config.getfloat('MODEL','LONCP')
-        # self.cap_lim = config.getfloat('MODEL','CAP_LIM')
-        # self.max_z_int = float(config.get('MODEL','MAX_Z_INT'))
         self.eps = config.getfloat('MODEL','EPS')
 
         self.latrange = [float(i) for i in config.get('MODEL', 'LATRANGE').split(',')]
@@ -90,65 +78,6 @@ class Model(object):
         self.numgridpnt = config.getint('MODEL','NUMGRIDPNT')
 
 
-    # def basis_numbers(self,n):
-    #     """
-    #     Converts a single 3D index number into 3 individual indexes for the radial, latitudinal, and azimulthal components
-
-    #     Parameters:
-    #         n: [int]
-    #             single 3D index number
-
-    #     Returns:
-    #         k: [int]
-    #             radial index number corresponding to n
-    #         l: [int]
-    #             latitudinal index number corresponding to n
-    #         m: [int]
-    #             azimuthal index number corresponding to n
-    #     """
-    #     k = n//(self.maxl**2)
-    #     r = n%(self.maxl**2)
-    #     l = np.floor(np.sqrt(r))
-    #     m = r-l*(l+1)
-    #     return k, l, m
-
-    # def nu(self,n):
-    #     """
-    #     Returns the non-integer order of the spherical cap harmonics given a 3D index number
-    #     This is calculated using the approximation given in Thebault et al., 2006.
-
-    #     Parameters:
-    #         n: [int]
-    #             single 3D index number
-    #     Returns:
-    #         v: [double]
-    #             non-integer degree for the spherical cap harmonics
-    #     """
-    #     k, l, m = self.basis_numbers(n)
-    #     v = (2*l+0.5)*np.pi/(2*self.cap_lim)-0.5
-    #     return v
-
-    def set_model(self, R):
-
-        X, Y, Z = cc.geodetic_to_cartesian(R[0], R[1], R[2])
-        # hull = Delaunay(np.array([X,Y,Z]).T)
-
-        # # form a regular grid
-        # centers_lat = np.linspace(min(R[0]), max(R[0]), 8)
-        # centers_lon = np.linspace(min(R[1]), max(R[1]), 8)
-        # centers_alt = np.linspace(min(R[2]), max(R[2]), 8)
-        # lat, lon, alt = np.meshgrid(centers_lat, centers_lon, centers_alt)
-
-        # # convert to cartesian
-        # x, y, z = cc.geodetic_to_cartesian(lat.flatten(), lon.flatten(), alt.flatten())
-        # centers = np.array([x,y,z])
-
-        # # identify points within the convex hull of the original data set
-        # centers = centers[:,hull.find_simplex(centers.T)>=0]
-
-        # self.centers = centers.T
-        self.centers = np.array([X,Y,Z]).T
-        self.nbasis = self.centers.shape[0]
 
 
     def basis(self,gdlat,gdlon,gdalt):
@@ -167,23 +96,18 @@ class Model(object):
             - Something clever could probably be done to not recalculate the full expression when incrimenting n does not result in a change in k, or similar.
                 All the evaluations of special functions here make it one of the slowest parts of the code.
         """
-        # z = R[0]
-        # theta = R[1]
-        # phi = R[2]
 
         R = self.transform_coords(gdlat,gdlon,gdalt)
         A = []
         for n in range(self.nbasis):
-            # k, l, m = self.basis_numbers(n)
             c = self.centers[n]
             r = np.linalg.norm(R-c[:,None], axis=0)
             A.append(np.exp(-r**2/self.eps**2))
-            # v = self.nu(n)
-            # A.append(np.exp(-0.5*z)*sp.eval_laguerre(k,z)*self.Az(v,m,phi)*sp.lpmv(m,v,np.cos(theta)))
         return np.array(A).T
 
 
     def grad_basis(self,R):
+        # TODO: Needs to be updated
         """
         Calculates a matrix of the gradient of basis functions evaluated at all input points
 
@@ -222,6 +146,7 @@ class Model(object):
         return np.array(Ag).T
 
 
+    # TODO: Need to actually impliment this with the correct derivatives - currently meaningless
     def eval_omega(self):
         omega = np.zeros((self.nbasis,self.nbasis))
         for ni in range(self.nbasis):
@@ -296,136 +221,6 @@ class Model(object):
         return T
 
 
-    def eval_model(self,R,C,calcgrad=False,calcerr=False,verbose=False):
-        """
-        Evaluate the density and gradients at the points in R given the coefficients C.
-         If the covarience matrix, dC, is provided, the errors in the density and gradients will be calculated.  If not,
-         just the density and gradient vectors will be returned by default.
-
-        Parameters:
-            R: [ndarray(3,npoints)]
-                array of input coordinates
-                R = [[z coordinates (m)],[theta coordinates (rad)],[phi coordinates (rad)]]
-                if input points are expressed as a list of r,t,p points, eg. points = [[r1,t1,p1],[r2,t2,p2],...], R = np.array(points).T
-            calcgrad: [bool]
-                indicates if gradients should be calculated
-                True (default): gradients WILL be calculated
-                False: gradients WILL NOT be calculated
-                Setting calcgrad=False if gradients are not required may improve efficiency
-            calcerr: [bool]
-                indicates if errors on parameters and gradients should be calculated
-                True: errors WILL be calculated
-                False (default): errors WILL NOT be calculated
-            verbose: [bool]
-                indicates if function should be run in verbose mode
-                This prints a warning if dC is not specified and the errors will not be calculated.
-                True: verbose mode is ON
-                False (default): verbose mode is OFF
-        Returns:
-            out: [dict]
-                dictionary containing calculated parameter, gradient, and error arrays, as appropriate
-                vaild keys:
-                    'param': parameter
-                    'grad': gradient (if calcgrad=True)
-                    'err': error on parameter (if calcerr=True)
-                    'gerr': error on gradient (if calcgrad=True AND calcerr=True)
-        Notes:
-            - A rough framework for error handling has been included in this code, but it has not been used often.
-                The method needs to be validated still and there are probably errors in the code.
-        """
-
-#         if self.C is None:
-#             print 'WARNING: C not specified in Model!'
-
-        R = self.transform_coord(R)
-
-        out = {}
-        A = self.eval_basis(R)
-        parameter = np.reshape(np.dot(A,C),np.shape(A)[0])
-        out['param'] = parameter
-
-        if calcgrad:
-            Ag = self.eval_grad_basis(R)
-#             gradient = np.reshape(np.tensordot(Ag,self.C,axes=1),(np.shape(Ag)[0],np.shape(Ag)[1]))
-            gradient = np.reshape(np.tensordot(Ag,C,axes=1),(np.shape(Ag)[0],np.shape(Ag)[1]))
-            out['grad'] = gradient
-
-        if calcerr:
-            if self.dC is None:
-                if verbose:
-                    print('Covariance matrix not provided. Errors will not be calculated.')
-            error = np.diag(np.squeeze(np.dot(A,np.dot(self.dC,A.T))))
-            out['err'] = error
-
-            if calcgrad:
-                gradmat = np.tensordot(Ag,np.tensordot(self.dC,Ag.T,axes=1),axes=1)
-                graderr = []
-                for i in range(np.shape(gradmat)[0]):
-                    graderr.append(np.diag(gradmat[i,:,:,i]))
-                graderr = np.array(graderr)
-                out['gerr'] = graderr
-        return out
-
-
-    def Az(self,v,m,phi):
-        """
-        Evaluates the azimuthal function
-
-        Parameters:
-            v: [double]
-                non-integer degree of spherical cap harmonics
-            m: [int]
-                order of spherical cap harmonics
-            phi: [ndarray]
-                array of phi values (radians)
-        Returns:
-            az: [ndarray]
-                evaluated azimuthal function at all values of phi
-        """
-        if m < 0:
-            return self.Kvm(v,abs(m))*np.sin(abs(m)*phi)
-        else:
-            return self.Kvm(v,abs(m))*np.cos(abs(m)*phi)
-
-
-    def dAz(self,v,m,phi):
-        """
-        Evaluates the derivative of the azimuthal function
-
-        Parameters:
-            v: [double]
-                non-integer degree of spherical cap harmonics
-            m: [int]
-                order of spherical cap harmonics
-            phi: [ndarray]
-                array of phi values (radians)
-        Returns:
-            daz: [ndarray]
-                evaluated derivative of the azimuthal function at all values of phi
-        """
-        if m < 0:
-            return abs(m)*self.Kvm(v,abs(m))*np.cos(abs(m)*phi)
-        else:
-            return -1*m*self.Kvm(v,abs(m))*np.sin(abs(m)*phi)
-
-
-    def Kvm(self,v,m):
-        """
-        Evaluates the constant Kvm associated with spherical harmonics
-
-        Parameters:
-            v: [double]
-                non-integer degree of spherical cap harmonics
-            m: [int]
-                order of spherical cap harmonics
-        Returns:
-            Kvm: [double]
-                constant Kvm
-        """
-        Kvm = np.sqrt((2*v+1)/(4*np.pi)*sp.gamma(float(v-m+1))/sp.gamma(float(v+m+1)))
-        if m != 0:
-            Kvm = Kvm*np.sqrt(2)
-        return Kvm
 
 
     def transform_coords(self,lat,lon,alt):
@@ -449,26 +244,8 @@ class Model(object):
 
         """
 
-        # x, y, z = cc.geodetic_to_cartesian(R0[0], R0[1], R0[2])
         x, y, z = pm.geodetic2ecef(lat, lon, alt)
         R_trans = np.array([x, y, z])
-
-        # try:
-        #     phi0 = self.cp[1]
-        #     theta0 = self.cp[0]
-        # except:
-        #     phi0 = np.average(R0[2])
-        #     theta0 = -1*np.average(R0[1])
-        #     self.cp = [theta0,phi0]
-
-
-        # k = np.array([np.cos(phi0+np.pi/2.),np.sin(phi0+np.pi/2.),0.])
-
-        # x, y, z = cc.spherical_to_cartesian(R0[0],R0[1],R0[2])
-        # Rp = np.array([x,y,z])
-        # Rr = np.array([R*np.cos(theta0)+np.cross(k,R)*np.sin(theta0)+k*np.dot(k,R)*(1-np.cos(theta0)) for R in Rp.T]).T
-        # r, t, p = cc.cartesian_to_spherical(Rr[0],Rr[1],Rr[2])
-        # R_trans = np.array([100*(r/RE-1),t,p])
 
         return R_trans
 
