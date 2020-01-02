@@ -3,10 +3,12 @@
 import numpy as np
 import scipy.special as sp
 import scipy.integrate
-import coord_convert as cc
+# import coord_convert as cc
+import configparser
+import pymap3d as pm
 from scipy.spatial import ConvexHull, Delaunay
 
-RE = 6371.2*1000.           # Earth Radius (m)	
+RE = 6371.2*1000.           # Earth Radius (m)
 
 class Model(object):
     # TODO: update docstring
@@ -47,16 +49,45 @@ class Model(object):
         - All methods EXCEPT for eval_model() can be called without specifying C or dC.
     """
 
-    def __init__(self):
-        self.eps = 100000.0
+    def __init__(self, config_file):
+        self.read_config(config_file)
+        # self.eps = 100000.0
 
-        # basis_centers = np.array([[77., -95.5, 300.], [76., -86., 300.], [78.,-88.5, 300.], [77., -95.5, 350.], [76., -86., 350.], [78.,-88.5, 350.], [77., -95.5, 400.], [76., -86., 400.], [78.,-88.5, 400.]])
+        # basis_centers = np.array([[77., -95.5, 350.], [76., -86., 350.], [78.,-88.5, 350.], [77., -95.5, 350.], [76., -86., 350.], [78.,-88.5, 350.], [77., -95.5, 400.], [76., -86., 400.], [78.,-88.5, 400.]]).T
 
+        lat, lon, alt = np.meshgrid(np.linspace(self.latrange[0],self.latrange[1],self.numgridpnt),np.linspace(self.lonrange[0],self.lonrange[1],self.numgridpnt),np.linspace(self.altrange[0],self.altrange[1],self.numgridpnt)*1000.)
+
+        # X, Y, Z = pm.geodetic2ecef(basis_centers[0], basis_centers[1], basis_centers[2])
+        X, Y, Z = pm.geodetic2ecef(lat.flatten(), lon.flatten(), alt.flatten())
+
+        self.centers = np.array([X,Y,Z]).T
+        self.nbasis = self.centers.shape[0]
+
+        self.eval_reg_matricies = {}
 
         # self.maxk = maxk
         # self.maxl = maxl
         # self.nbasis = self.maxk*self.maxl**2
         # self.cap_lim = cap_lim*np.pi/180.
+
+    def read_config(self, config_file):
+        # read config file
+        config = configparser.ConfigParser()
+        config.read_file(config_file)
+
+        # self.maxk = config.getint('MODEL','MAXK')
+        # self.maxl = config.getint('MODEL','MAXL')
+        self.latcp = config.getfloat('MODEL','LATCP')
+        self.loncp = config.getfloat('MODEL','LONCP')
+        # self.cap_lim = config.getfloat('MODEL','CAP_LIM')
+        # self.max_z_int = float(config.get('MODEL','MAX_Z_INT'))
+        self.eps = config.getfloat('MODEL','EPS')
+
+        self.latrange = [float(i) for i in config.get('MODEL', 'LATRANGE').split(',')]
+        self.lonrange = [float(i) for i in config.get('MODEL', 'LONRANGE').split(',')]
+        self.altrange = [float(i) for i in config.get('MODEL', 'ALTRANGE').split(',')]
+
+        self.numgridpnt = config.getint('MODEL','NUMGRIDPNT')
 
 
     # def basis_numbers(self,n):
@@ -120,7 +151,7 @@ class Model(object):
         self.nbasis = self.centers.shape[0]
 
 
-    def eval_basis(self,R):
+    def basis(self,gdlat,gdlon,gdalt):
         """
         Calculates a matrix of the basis functions evaluated at all input points
 
@@ -139,6 +170,8 @@ class Model(object):
         # z = R[0]
         # theta = R[1]
         # phi = R[2]
+
+        R = self.transform_coords(gdlat,gdlon,gdalt)
         A = []
         for n in range(self.nbasis):
             # k, l, m = self.basis_numbers(n)
@@ -150,7 +183,7 @@ class Model(object):
         return np.array(A).T
 
 
-    def eval_grad_basis(self,R):
+    def grad_basis(self,R):
         """
         Calculates a matrix of the gradient of basis functions evaluated at all input points
 
@@ -188,7 +221,7 @@ class Model(object):
         # print np.shape(np.array(Ag).T)
         return np.array(Ag).T
 
-    
+
     def eval_omega(self):
         omega = np.zeros((self.nbasis,self.nbasis))
         for ni in range(self.nbasis):
@@ -333,7 +366,7 @@ class Model(object):
                 out['gerr'] = graderr
         return out
 
-        
+
     def Az(self,v,m,phi):
         """
         Evaluates the azimuthal function
@@ -347,7 +380,7 @@ class Model(object):
                 array of phi values (radians)
         Returns:
             az: [ndarray]
-                evaluated azimuthal function at all values of phi 
+                evaluated azimuthal function at all values of phi
         """
         if m < 0:
             return self.Kvm(v,abs(m))*np.sin(abs(m)*phi)
@@ -368,7 +401,7 @@ class Model(object):
                 array of phi values (radians)
         Returns:
             daz: [ndarray]
-                evaluated derivative of the azimuthal function at all values of phi 
+                evaluated derivative of the azimuthal function at all values of phi
         """
         if m < 0:
             return abs(m)*self.Kvm(v,abs(m))*np.cos(abs(m)*phi)
@@ -395,7 +428,7 @@ class Model(object):
         return Kvm
 
 
-    def transform_coord(self,R0):
+    def transform_coords(self,lat,lon,alt):
         """
         Transform from spherical coordinates to something friendlier for calculating the basis fit.
         This involves a rotation so that the data is centered around the north pole and a trasformation
@@ -416,7 +449,8 @@ class Model(object):
 
         """
 
-        x, y, z = cc.geodetic_to_cartesian(R0[0], R0[1], R0[2])
+        # x, y, z = cc.geodetic_to_cartesian(R0[0], R0[1], R0[2])
+        x, y, z = pm.geodetic2ecef(lat, lon, alt)
         R_trans = np.array([x, y, z])
 
         # try:
@@ -472,5 +506,3 @@ class Model(object):
         vec_rot = np.array([vr,vt,vp]).T
 
         return vec_rot
-
-    
