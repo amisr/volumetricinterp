@@ -12,38 +12,22 @@ import pymap3d as pm
 
 class Evaluate(object):
     """
-    This class evaluates the 3D analytic model that is used to describe density and temperature within an AMISR FoV.
-    It handles a lot of the nitty-gritty coordinate transformations and loading coefficients from file that are nessisary before the model is evaluated.
+    This class evaluates the 3D analytic model to return interpolated parameters within an AMISR FoV.  It is initalized with
+    an interpolation coefficient filename, then parameters can be evaluated at a particular time and location.
 
     Parameters:
-        datetime: [datetime object]
-            date and time to evaluate the model at
-        radar: [str]
-            radar to evaluate model for (valid options are 'RISR-N', 'RISR-C', or 'PFISR')
-        code: [str]
-            Long-pulse ('lp') or Alternating Code ('ac')
-        param: [AMISR_param object]
-            parameter to evaluate - either density or temperature
+        coeff_filename: [str]
+            Interpolation coefficient filename
         timetol: [double]
             tolerance for difference in time between the requested datetime and actual times where data's available (seconds)
-
-    Atributes:
-        datetime: time requested for this particular model instance
-        radar: radar for this particular model instance
-        code: radar code (LP vs AC)
-        param: parameter for this model instance
-        timetol: allowable variation from datetime in seconds (default is 60s)
-        t: actual time from the data file of this model instance
-        cp: center point ([lat, lon] in radians) of the data/location of the pole for the speherical cap
-        hv: list of verticies for the convex hull
+        timeinterp: [bool]
+            flag to detmine whether or not to interpolate in time
 
     Methods:
         loadh5: loads coefficents from a saved hdf5 file
-        getparam: fully sets up and evaluates the model from input points
-        transform_coords: transforms input cordinates so they can be handled by the model
-        inverse_transform: transforms gradients from model coordinates back to input coordinates
-        compute_hull: computes the convex hull that defines where model is valid
+        getparam: evaluates the model from input points
         check_hull: checks if the input coordinates are within the convex hull
+        get_C: return correct C array given time
     """
 
     def __init__(self,coeff_filename,timetol=60.,timeinterp=False):
@@ -65,16 +49,13 @@ class Evaluate(object):
         self.model = m.Model(config_file)
 
 
-    def loadh5(self,filename=None,raw=False):
+    def loadh5(self,filename=None):
         """
         Loads coefficients from a saved hdf5 file based on the date, radar, and param attributes
 
         Parameters:
             filename: [str]
                 file to load
-            raw: Optional [bool]
-                flag to indicate if the raw data should be loaded or not
-                default is False (raw data will NOT be loaded)
         """
 
         with tables.open_file(filename, 'r') as h5file:
@@ -96,15 +77,18 @@ class Evaluate(object):
         This is the main function that is used to retrieve reconstructed parameters.
 
         Parameters:
-            R0: [ndarray(3,npoints)]
-                array of input points in geocentric coordinates
-                R = [[r coordinates (m)],[theta coordinates (rad)],[phi coordinates (rad)]]
-                if input points are expressed as a list of r,t,p points, eg. points = [[r1,t1,p1],[r2,t2,p2],...], R = np.array(points).T
+            time: [datetime]
+                time parameters should be evaluated at
+            gdlat: [ndarray]
+                geodetic latitude (can be multidimensional array)
+            gdlon: [ndarray]
+                geodetic longitude (can be multidimensional array)
+            gdalt: [ndarray]
+                geodetic altitude (can be multidimensional array)
              calcgrad: [bool]
                 indicates if gradients should be calculated
-                True (default): gradients WILL be calculated
-                False: gradients WILL NOT be calculated
-                Setting calcgrad=False if gradients are not required may improve efficiency
+                True: gradients WILL be calculated
+                False (default): gradients WILL NOT be calculated
             calcerr: [bool]
                 indicates if errors on parameters and gradients should be calculated
                 True: errors WILL be calculated
@@ -117,10 +101,6 @@ class Evaluate(object):
                 if calcgrad=False, dP is an array of NAN
         """
 
-
-        # Rshape = R0.shape
-        # R0 = R0.reshape(Rshape[0], -1)
-        # check = self.check_hull(R0)
 
         C, dC = self.get_C(time)
 
@@ -163,31 +143,24 @@ class Evaluate(object):
         Check if the input points R0 are within the convex hull of the original data.
 
         Parameters:
-            R0: [ndarray(3,npoints)]
-                array of input points in geocentric coordinates
-                R = [[r coordinates (m)],[theta coordinates (rad)],[phi coordinates (rad)]]
-                if input points are expressed as a list of r,t,p points, eg. points = [[r1,t1,p1],[r2,t2,p2],...], R = np.array(points).T
-
+            lat0: [ndarray]
+                geodetic latitude (can be multidimensional array)
+            lon0: [ndarray]
+                geodetic longitude (can be multidimensional array)
+            alt0: [ndarray]
+                geodetic altitude (can be multidimensional array)
         """
-        # x, y, z = cc.spherical_to_cartesian(self.hull_v[:,0],self.hull_v[:,1],self.hull_v[:,2])
-        # x, y, z = cc.geodetic_to_cartesian(self.hull_v[:,0],self.hull_v[:,1],self.hull_v[:,2])
-        # x, y, z = pm.geodetic2ecef(self.hull_vert[:,0],self.hull_v[:,1],self.hull_v[:,2])
-        # vert_cart = np.array([x,y,z]).T
+        # this is horribly inefficient, but mostly nessisary?
 
         hull = ConvexHull(sel.hull_vert)
         check = []
-        # for R in R0.T:
         for lat, lon, alt in zip(lat0, lon0, alt0):
             value = False
 
-            # x, y, z = cc.spherical_to_cartesian(R[0],R[1],R[2])
-            # x, y, z = cc.geodetic_to_cartesian(R[0],R[1],R[2])
             x, y, z = pm.geodetic2ecef(lat,lon,alt)
-            pnt = np.array([[x,y,z]])
-
-            pnts = np.append(self.hull_vert,pnt,axis=0)
-            nh = ConvexHull(pnts)
-            if np.array_equal(hull.vertices,nh.vertices):
+            pnts = np.append(self.hull_vert, np.array([[x,y,z]]), axis=0)
+            new_hull = ConvexHull(pnts)
+            if np.array_equal(hull.vertices,new_hull.vertices):
                 value = True
             check.append(value)
         return np.array(check)
@@ -212,14 +185,16 @@ class Evaluate(object):
         t0 = (t-dt.datetime.utcfromtimestamp(0)).total_seconds()
 
         # find time of mid-points
-        mt = np.array([(float(ut[0])+float(ut[1]))/2. for ut in self.time])
+        # mt = np.array([(float(ut[0])+float(ut[1]))/2. for ut in self.time])
+        mt = np.mean(self.time, axis=1)
 
-        if t0<np.min(mt) or t0>np.max(mt):
-            print('Time out of range!')
-            C = np.full(self.nbasis,np.nan)
-            dC = np.full((self.nbasis,self.nbasis),np.nan)
+        # if t0<np.min(mt) or t0>np.max(mt):
+        #     print('Time out of range!')
+        #     C = np.full(self.nbasis,np.nan)
+        #     dC = np.full((self.nbasis,self.nbasis),np.nan)
 
-        else:
+        # else:
+        try:
             if self.timeinterp:
                 # find index of neighboring points
                 i = np.argwhere((t0>=mt[:-1]) & (t0<mt[1:])).flatten()[0]
@@ -231,26 +206,31 @@ class Evaluate(object):
 
             else:
                 i = np.argmin(np.abs(mt-t0))
+                if mt[i]-t0>self.timetol:
+                    raise IndexError
                 C = self.Coeffs[i]
                 dC = self.Covariance[i]
 
+        except IndexError:
+            raise ValueError('Requested time out of range of data file.')
+
         return C, dC
 
-    def find_index(self, t):
-        """
-        Find the index of a file that is closest to the given time
-
-        Parameters:
-            t: [datetime object]
-                target time
-
-        Returns:
-            rec: [int]
-                index of the record that is closest to the target time
-        """
-
-        time0 = (t-dt.datetime.utcfromtimestamp(0)).total_seconds()
-        time_array = np.array([(float(ut[0])+float(ut[1]))/2. for ut in self.time])
-        rec = np.argmin(np.abs(time_array-time0))
-
-        return rec
+    # def find_index(self, t):
+    #     """
+    #     Find the index of a file that is closest to the given time
+    #
+    #     Parameters:
+    #         t: [datetime object]
+    #             target time
+    #
+    #     Returns:
+    #         rec: [int]
+    #             index of the record that is closest to the target time
+    #     """
+    #
+    #     time0 = (t-dt.datetime.utcfromtimestamp(0)).total_seconds()
+    #     time_array = np.array([(float(ut[0])+float(ut[1]))/2. for ut in self.time])
+    #     rec = np.argmin(np.abs(time_array-time0))
+    #
+    #     return rec

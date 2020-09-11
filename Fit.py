@@ -38,22 +38,7 @@ class Fit(object):
         raw_index: list of the index within each raw data file correspoinding ot each event fit
 
     Methods:
-        get_ns: calculating the 2 n indicies for a NxN array from a 1D index q
-        eval_omega: evaluate Omega, the curvature regularization matrix
-        parallelize_omega: evaluates a single term in the Omega matrix, useful for parallelizing the loop
-        omega_z_integrand: evaluates the z integrand for a term in the Omega matrix
-        omega_t_integrand: evaluates the theta integrand for a term in the Omega matrix
-        omega_p_integrand: evaluates the phi integrand for a term in the Omega matrix
-        eval_Psi: evaluate Psi matrix, used for 0th order regularization
-        parallelize_psi: evaluates a single term in the Psi maxtrix, useful for parallelizing the loop
-        psi_z_integrand: evaluates the z integrand for a term in the Psi matrix
-        psi_t_integrand: evaluates the theta integrand for a term in the Psi matrix
-        psi_p_integrand: evaluates the phi integrand for a term in the Psi matrix
-        eval_Tau: evaluates Tau vector, used for 0th order regularization
-        parallelize_tau: evaluates a single term in the Tau vector, useful for parallelizing the loop
-        tau_z_integrand: evaluates the z integrand for a term in the Tau vector
-        tau_t_integrand: evaluates the theta integrand for a term in the Tau vector
-        tau_p_integrand: evaluates the phi integrand for a term in the Tau vector
+        read_config: read fit specifications from config file
         find_reg_params: finds the regularization parameters
         chi2: finds the regularization parameter using the chi2-nu method
         chi2objfunct: objective function for the chi2-nu method
@@ -63,8 +48,8 @@ class Fit(object):
         prompt: finds the regularization parameter via comand line prompts for user input
         eval_C: evaluates the coefficent vector and covariance matrix
         fit: performs fits to the 3D analytic model for data from a series of events
+        get_data: read data froom input file
         saveh5: save the results of fit() to an output hdf5 file
-        validate: plot the raw data and model fit to check for a good visual agreement
 
     """
 
@@ -77,7 +62,14 @@ class Fit(object):
         self.model = m.Model(open(self.configfile))
 
     def read_config(self, config_file):
-        # read config file
+        """
+        Read fit parameters from input config file.
+
+        Parameters:
+            config_file: [str]
+                config file name
+        """
+
         config = configparser.ConfigParser()
         config.read_file(open(config_file))
 
@@ -225,8 +217,6 @@ class Fit(object):
 
         return reg_param
 
-
-
     def chi2objfunct(self,alpha,A,b,W,reg_matrices,nu,reg):
         """
         Objective function for the chi2 method of finding the regularization parameter.  Returns chi^2-nu for a given
@@ -270,9 +260,6 @@ class Fit(object):
 
         return chi2-nu
 
-
-
-
     def gcv(self,A,b,W,reg_matrices,reg):
         """
         Find the regularization parameter using the generalized cross validation method.
@@ -308,7 +295,6 @@ class Fit(object):
         reg_param = np.power(10.,solution.x[0])
 
         return reg_param
-
 
     def gcvobjfunct(self,alpha,A0,b0,W0,reg_matrices,reg):
         """
@@ -364,7 +350,6 @@ class Fit(object):
 
         return sum(residuals)
 
-
     def manual(self,A,b,W,Omega,Psi,Tau,reg):
         """
         Manually hard-code the regularization parameter.
@@ -395,8 +380,6 @@ class Fit(object):
 
         return reg_param
 
-
-
     def prompt(self,A,b,W,Omega,Psi,Tau,reg):
         """
         Enter the regularization parameter via command line prompt.
@@ -425,22 +408,17 @@ class Fit(object):
 
     def compute_hull(self,lat,lon,alt):
         """
-        Compute the convex hull that contains the original data.  This is nessisary to check if points requested from the
-         model are within the vaild range of where the data constrains the model.
+        Compute the convex hull that contains the original data to save to the output file.
 
         Parameters:
-            R0: [ndarray(3,npoints)]
-                array of input points in geocentric coordinates
-                R = [[r coordinates (m)],[theta coordinates (rad)],[phi coordinates (rad)]]
-                if input points are expressed as a list of r,t,p points, eg. points = [[r1,t1,p1],[r2,t2,p2],...], R = np.array(points).T
-        Returns:
-            hv: [ndarray(3,nverticies)]
-                array of the coordinates of the verticies of the convex hull
-        Notes:
-            - hv is also saved as an attribute of the class
+            lat: [ndarray]
+                geodetic latitude
+            lon: [ndarray]
+                geodetic longitude
+            alt: [ndarray]
+                geodetic altitude
         """
 
-        # x, y, z = cc.geodetic_to_cartesian(R0[0],R0[1],R0[2])
         x, y, z = pm.geodetic2ecef(lat, lon, alt)
         R_cart = np.array([x,y,z]).T
 
@@ -599,12 +577,11 @@ class Fit(object):
         self.Coeffs = np.array(Coeffs)
         self.Covariance = np.array(Covariance)
         self.chi_sq = np.array(chi_sq)
-        self.raw_filename = self.filename
 
 
     def get_data(self,filename):
         """
-        Read parameter from a processed AMISR hdf5 file and return the time, coordinates, values, and errors as arrays.
+        Read a processed AMISR hdf5 file and return the time, coordinates, values, and errors as arrays.
 
         Parameters:
             filename: [str]
@@ -613,8 +590,12 @@ class Fit(object):
         Returns:
             utime: [ndarray (nrecordsx2)]
                 start and end time of each record (Unix Time)
-            R0: [ndarray (3xnpoints)]
-                coordinates of each data point in spherical coordinate system
+            latitude: [ndarray (npoints)]
+                geodetic latitude of each point
+            longitude: [ndarray (npoints)]
+                geodetic longitude of each point
+            altitude: [ndarray (npoints)]
+                geodetic altitude of each point
             value: [ndarray (nrecordsxnpoints)]
                 parameter value of each data point
             error: [ndarray (nrecordsxnpoints)]
@@ -676,7 +657,6 @@ class Fit(object):
         error[bad_data] = np.nan
 
         # remove the points where coordinate arrays are NaN
-        # these points usually correspond to altitude bins that were specified by the fitter but a particular beam does not reach
         value = value[:,np.isfinite(altitude)]
         error = error[:,np.isfinite(altitude)]
         latitude = latitude[np.isfinite(altitude)]
@@ -714,7 +694,7 @@ class Fit(object):
 
             h5out.create_array(fgroup, 'hull_vert', self.hull_vert)
 
-            h5out.create_array(dgroup, 'filename', self.raw_filename.encode('utf-8'))
+            h5out.create_array(dgroup, 'filename', self.filename.encode('utf-8'))
 
             # config file
             Path = os.path.dirname(os.path.abspath(self.configfile))
