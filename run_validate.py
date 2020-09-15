@@ -6,6 +6,7 @@
 import numpy as np
 import datetime as dt
 import h5py
+import pymap3d as pm
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import cartopy.crs as ccrs
@@ -26,7 +27,7 @@ def interp(starttime, endtime):
     fit.fit(starttime=starttime, endtime=endtime)
     fit.saveh5()
 
-def validate(targtime, altitude):
+def validate(starttime, endtime, altitudes):
     """
     Creates a basic map of the volumetric reconstruction with the original data at a particular altitude slice to confirm that the reconstruction is reasonable.
     This function is designed to fit and plot only a small subset of an experiment (between starttime and endtime) so that it can be used to fine-tune parameters
@@ -43,106 +44,78 @@ def validate(targtime, altitude):
             points that fall +/- altlim from altitude will be plotted on top of reconstructed contours as scatter
     """
 
-    # self.fit(starttime=starttime, endtime=endtime)
-    #
-    # lat0, lon0, alt0 = self.raw_coords
 
-    # lat_coords = {'RISR-N':np.linspace(74., 80., 10), 'RISR-C':np.linspace(69., 75.,10)}
-    # lon_coords = {'RISR-N':np.linspace(260., 285., 10), 'RISR-C':np.linspace(250., 270., 10)}
-
+    # initalize Evaluate object
     eval = Evaluate('test_out.h5')
-    # print(eval.model.latcp, eval.model.loncp)
+
+    hull_lat, hull_lon, hull_alt = pm.ecef2geodetic(eval.hull_vert[:,0], eval.hull_vert[:,1], eval.hull_vert[:,2])
 
     # set input coordinates
-    latn, lonn = np.meshgrid(np.linspace(74., 80., 10), np.linspace(260., 285., 10))
-    altn = np.full(latn.shape, altitude)
-    # R0n = np.array([latn, lonn, altn])
+    gdlat, gdlon, gdalt = np.meshgrid(np.linspace(np.nanmin(hull_lat), np.nanmax(hull_lat), 100), np.linspace(np.nanmin(hull_lon), np.nanmax(hull_lon), 100), altitudes)
 
-    # Rshape = R0n.shape
-    # R0 = R0n.reshape(Rshape[0], -1)
-
-    map_proj = ccrs.LambertConformal(central_latitude=eval.model.latcp, central_longitude=eval.model.loncp)
-    denslim = [0., 3.e11]
-
-    dens = eval.getparam(targtime,latn.flatten(), lonn.flatten(), altn.flatten())
-    dens = dens.reshape(latn.shape)
-    # print(dens)
-
-    # for i, (rd, C) in enumerate(zip(self.raw_data, self.Coeffs)):
-    #     out = self.eval_model(R0,C)
-    #     ne = out['param'].reshape(tuple(list(Rshape)[1:]))
-
-    utargtime = (targtime-dt.datetime.utcfromtimestamp(0)).total_seconds()
-
-
-    # get raw data from file
+    # get original raw data from file
     with h5py.File('test_out.h5', 'r') as f:
         raw_filename = f['/RawData/filename'][()]
-        # raw_lat = f['Geomag/Latitude'][:]
-        # raw_lon = f['Geomag/Longitude'][:]
-
-    # print(raw_filename, targtime)
 
     with h5py.File(raw_filename, 'r') as f:
         raw_alt = f['/Geomag/Altitude'][:]
-
-        # raw_alt = raw_alt[tuple(np.arange(alt.shape[0])),tuple(aidx)]
         raw_lat = f['/Geomag/Latitude'][:]
         raw_lon = f['/Geomag/Longitude'][:]
 
         utime = f['Time/UnixTime'][:]
-        tidx = np.argmin(np.abs(np.mean(utime,axis=1)-utargtime))
-        raw_dens = f['FittedParams/Ne'][tidx,:,:]
-
-    # find index closeset to the projection altitude
-    aidx = np.nanargmin(np.abs(raw_alt-altitude),axis=1)
-    # print(aidx)
-
-    raw_lat = raw_lat[tuple(np.arange(raw_alt.shape[0])),tuple(aidx)]
-    raw_lon = raw_lon[tuple(np.arange(raw_alt.shape[0])),tuple(aidx)]
-    raw_dens = raw_dens[tuple(np.arange(raw_alt.shape[0])),tuple(aidx)]
-
-    # print(raw_lat.shape, raw_lon.shape, raw_dens.shape)
-        # # select altitude at correct index for each beam (fancy indexing with tuples to avoid for loops)
-        # latitude = lat[tuple(np.arange(alt.shape[0])),tuple(aidx)]
-        # longitude = lon[tuple(np.arange(alt.shape[0])),tuple(aidx)]
-        # altitude = alt[tuple(np.arange(alt.shape[0])),tuple(aidx)]
-        # density = dens[:,tuple(np.arange(alt.shape[0])),tuple(aidx)]
+        idx = np.argwhere((utime[:,0]>=(starttime-dt.datetime.utcfromtimestamp(0)).total_seconds()) & (utime[:,1]<=(endtime-dt.datetime.utcfromtimestamp(0)).total_seconds())).flatten()
+        raw_time = np.array([dt.datetime.utcfromtimestamp(t) for t in np.mean(utime, axis=1)[idx]])
+        raw_dens = f['FittedParams/Ne'][idx,:,:]
 
 
-    # print(raw_alt)
-    # print(raw_alt.shape, raw_lat.shape, raw_lon.shape)
+    # setup figure
+    fig = plt.figure(figsize=(len(altitudes)*2,len(raw_time)*2))
+    gs = gridspec.GridSpec(len(raw_time), len(altitudes))
+    gs.update(left=0.05,right=0.9,bottom=0.01,top=0.95)
+    map_proj = ccrs.LambertConformal(central_latitude=np.nanmean(hull_lat), central_longitude=np.nanmean(hull_lon))
+    denslim = [0., 3.e11]
 
-    # create plot
-    fig = plt.figure(figsize=(10,10))
-    ax = fig.add_axes([0.02, 0.1, 0.9, 0.8], projection=map_proj)
-    ax.coastlines()
-    ax.gridlines()
-    # ax.set_extent([min(lon0),max(lon0),min(lat0),max(lat0)])
+    for i, time in enumerate(raw_time):
 
-    # plot density contours from RISR
-    c = ax.contourf(lonn, latn, dens, np.linspace(denslim[0],denslim[1],31), extend='both', transform=ccrs.PlateCarree())
-    ax.scatter(raw_lon, raw_lat, c=raw_dens, vmin=denslim[0], vmax=denslim[1], transform=ccrs.Geodetic())
-    # ax.scatter(lon0[np.abs(alt0-altitude)<altlim], lat0[np.abs(alt0-altitude)<altlim], c=rd[np.abs(alt0-altitude)<altlim], vmin=denslim[0], vmax=denslim[1], transform=ccrs.Geodetic())
+        dens = eval.getparam(time,gdlat.flatten(), gdlon.flatten(), gdalt.flatten())
+        dens = dens.reshape(gdlat.shape)
 
-    cax = fig.add_axes([0.91,0.1,0.03,0.8])
-    cbar = plt.colorbar(c, cax=cax)
-    cbar.set_label(r'Electron Density (m$^{-3}$)')
+        for j, alt in enumerate(altitudes):
 
-    # plt.savefig('temp{:02d}.png'.format(i))
-    # plt.close(fig)
-    plt.show()
+            # find index closeset to the projection altitude
+            aidx = np.nanargmin(np.abs(raw_alt-alt),axis=1)
+            rlat = raw_lat[tuple(np.arange(raw_alt.shape[0])),tuple(aidx)]
+            rlon = raw_lon[tuple(np.arange(raw_alt.shape[0])),tuple(aidx)]
+            rdens = raw_dens[i,tuple(np.arange(raw_alt.shape[0])),tuple(aidx)]
+
+            # create plot
+            ax = fig.add_subplot(gs[i,j], projection=map_proj)
+            ax.coastlines()
+            ax.gridlines()
+
+            # plot density contours from RISR
+            c = ax.contourf(gdlon[:,:,j], gdlat[:,:,j], dens[:,:,j], np.linspace(denslim[0],denslim[1],31), extend='both', transform=ccrs.PlateCarree())
+            ax.scatter(rlon, rlat, c='white', s=20, vmin=denslim[0], vmax=denslim[1], transform=ccrs.Geodetic())
+            ax.scatter(rlon, rlat, c=rdens, s=10, vmin=denslim[0], vmax=denslim[1], transform=ccrs.Geodetic())
+            ax.set_title('{} km'.format(alt/1000.))
+
+        # plot time labels and colorbars
+        pos = ax.get_position()
+        plt.text(0.03,(pos.y0+pos.y1)/2.,time.time(),rotation='vertical',verticalalignment='center',horizontalalignment='center',transform=fig.transFigure)
+        cax = fig.add_axes([0.91,pos.y0,0.03,pos.height])
+        cbar = plt.colorbar(c, cax=cax)
+        cbar.set_label(r'Ne (m$^{-3}$)')
+
+    plt.savefig('test_fig.png')
 
 
 def main():
 
-    targtime = dt.datetime(2017,11,21,18,46)
-    st = dt.datetime(2017,11,21,18,40)
-    et = dt.datetime(2017,11,21,18,50)
-    #
-    # dayfit = Fit('config.ini')
+    st = dt.datetime(2016,11,27,22,55)
+    et = dt.datetime(2016,11,27,23,10)
+
     interp(st,et)
-    validate(targtime, 350.*1000.)
+    validate(st, et, np.array([250.,300.,350.,400.,450.])*1000.)
 
 
 if __name__ == '__main__':

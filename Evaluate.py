@@ -71,7 +71,7 @@ class Evaluate(object):
 
 
 
-    def getparam(self,time,gdlat,gdlon,gdalt,calcgrad=False,calcerr=False):
+    def getparam(self,time,gdlat,gdlon,gdalt,calcgrad=False,calcerr=False,check_hull=True):
         """
         Fully calculates parameters and their gradients given input coordinates and a time.
         This is the main function that is used to retrieve reconstructed parameters.
@@ -85,7 +85,7 @@ class Evaluate(object):
                 geodetic longitude (can be multidimensional array)
             gdalt: [ndarray]
                 geodetic altitude (can be multidimensional array)
-             calcgrad: [bool]
+            calcgrad: [bool]
                 indicates if gradients should be calculated
                 True: gradients WILL be calculated
                 False (default): gradients WILL NOT be calculated
@@ -93,6 +93,10 @@ class Evaluate(object):
                 indicates if errors on parameters and gradients should be calculated
                 True: errors WILL be calculated
                 False (default): errors WILL NOT be calculated
+            check_hull: [bool]
+                indicate if input points should be checked to confirm they are within the convex hull of the original data
+                True (default): input points WILL be checked
+                False: input points will not be checked
        Returns:
             P: [ndarray(npoints)]
                 array of the output parameter calculated at all input points
@@ -107,6 +111,10 @@ class Evaluate(object):
         # use einsum to retain shape of input arrays correctly
         A = self.model.basis(gdlat, gdlon, gdalt)
         parameter = np.reshape(np.dot(A,C),np.shape(A)[0])
+
+        if check_hull:
+            check = self.check_hull(gdlat, gdlon, gdalt)
+            parameter[~check]=np.nan
 
         return parameter
 
@@ -152,7 +160,7 @@ class Evaluate(object):
         """
         # this is horribly inefficient, but mostly nessisary?
 
-        hull = ConvexHull(sel.hull_vert)
+        hull = ConvexHull(self.hull_vert)
         check = []
         for lat, lon, alt in zip(lat0, lon0, alt0):
             value = False
@@ -185,7 +193,6 @@ class Evaluate(object):
         t0 = (t-dt.datetime.utcfromtimestamp(0)).total_seconds()
 
         # find time of mid-points
-        # mt = np.array([(float(ut[0])+float(ut[1]))/2. for ut in self.time])
         mt = np.mean(self.time, axis=1)
 
         # if t0<np.min(mt) or t0>np.max(mt):
@@ -206,7 +213,7 @@ class Evaluate(object):
 
             else:
                 i = np.argmin(np.abs(mt-t0))
-                if mt[i]-t0>self.timetol:
+                if np.abs(mt[i]-t0)>self.timetol:
                     raise IndexError
                 C = self.Coeffs[i]
                 dC = self.Covariance[i]
