@@ -106,119 +106,119 @@ class Model(object):
         return np.array(A).T
 
 
-    def grad_basis(self,R):
-        # TODO: Needs to be updated
-        """
-        Calculates a matrix of the gradient of basis functions evaluated at all input points
-
-        Parameters:
-            R: [ndarray(3,npoints)]
-                array of input coordinates
-                R = [[z coordinates (m)],[theta coordinates (rad)],[phi coordinates (rad)]]
-                if input points are expressed as a list of r,t,p points, eg. points = [[r1,t1,p1],[r2,t2,p2],...], R = np.array(points).T
-        Returns:
-            A: [ndarray(npoints,nbasis,3)]
-                array of gradient of basis functions evaluated at all input points
-        Notes:
-            - Something clever could probably be done to not recalculate the full expression when incrimenting n does not result in a change in k, or similar.
-                All the evaluations of special functions here make it one of the slowest parts of the code.
-        """
-        z = R[0]
-        theta = R[1]
-        phi = R[2]
-        Ag = []
-        x = np.cos(theta)
-        y = np.sin(theta)
-        e = np.exp(-0.5*z)
-        for n in range(self.nbasis):
-            k, l, m = self.basis_numbers(n)
-            v = self.nu(n)
-            L0 = sp.eval_laguerre(k,z)
-            L1 = sp.eval_genlaguerre(k-1,1,z)
-            Pmv = sp.lpmv(m,v,x)
-            Pmv1 = sp.lpmv(m,v+1,x)
-            A = self.Az(v,m,phi)
-            zhat = -0.5*e*(L0+2*L1)*Pmv*A*100./RE
-            that = e*L0*(-(v+1)*x*Pmv+(v-m+1)*Pmv1)*A/(y*(z/100.+1)*RE)
-            phat = e*L0*Pmv*self.dAz(v,m,phi)/(y*(z/100.+1)*RE)
-            Ag.append([zhat,that,phat])
-        # print np.shape(np.array(Ag).T)
-        return np.array(Ag).T
-
-
-    # TODO: Need to actually impliment this with the correct derivatives - currently meaningless
-    def eval_omega(self):
-        omega = np.zeros((self.nbasis,self.nbasis))
-        for ni in range(self.nbasis):
-            for nj in range(ni, self.nbasis):
-                omega[ni,nj]
-                O = self.omega_ij(ni, nj)
-                omega[ni,nj] = O
-                omega[nj,ni] = O
-        return omega
-
-    def omega_ij(self,ni,nj):
-        ki, li, mi = self.basis_numbers(ni)
-        kj, lj, mj = self.basis_numbers(nj)
-        vi = self.nu(ni)
-        vj = self.nu(nj)
-
-        z_int = lambda z: np.exp(-1*z)*sp.eval_laguerre(ki,z)*sp.eval_laguerre(kj,z)/z**2
-        t_int = lambda t: 1/np.sin(t)**3*(-1*vi*(vi*np.cos(t)**2+vi+1)*sp.lpmv(mi,vi,np.cos(t))+vi*(vi+mi)*np.cos(t)*sp.lpmv(mi,vi-1,np.cos(t))+vi*(vi-mi+1)*np.cos(t)*sp.lpmv(mi,vi+1,np.cos(t)))*(-1*vj*(vj*np.cos(t)**2+vj+1)*sp.lpmv(mj,vj,np.cos(t))+vj*(vj+mj)*np.cos(t)*sp.lpmv(mj,vj-1,np.cos(t))+vj*(vj-mj+1)*np.cos(t)*sp.lpmv(mj,vj+1,np.cos(t)))
-        p_int = lambda p: self.Az(vi,mi,p)*self.Az(vj,mj,p)
-
-        Iz = scipy.integrate.quad(z_int, 0., self.max_z_int)
-        It = scipy.integrate.quad(t_int, 0., self.cap_lim)
-        Ip = scipy.integrate.quad(p_int, 0., 2*np.pi)
-        O = Iz[0]*It[0]*Ip[0]
-        return O
-
-
-    def eval_psi(self):
-        psi = np.zeros((self.nbasis,self.nbasis))
-        for ni in range(self.nbasis):
-            for nj in range(ni, self.nbasis):
-                P = self.psi_ij(ni, nj)
-                psi[ni,nj] = P
-                psi[nj,ni] = P
-        return psi
-
-    def psi_ij(self, ni, nj):
-        ki, li, mi = self.basis_numbers(ni)
-        kj, lj, mj = self.basis_numbers(nj)
-        vi = self.nu(ni)
-        vj = self.nu(nj)
-
-        z_int = lambda z: np.exp(-1*z)*sp.eval_laguerre(ki,z)*sp.eval_laguerre(kj,z)*z**2
-        t_int = lambda t: sp.lpmv(mi,vi,np.cos(t))*sp.lpmv(mj,vj,np.cos(t))*np.sin(t)
-        p_int = lambda p: self.Az(vi,mi,p)*self.Az(vj,mj,p)
-
-        Iz = scipy.integrate.quad(z_int, 0., self.max_z_int)
-        It = scipy.integrate.quad(t_int, 0., self.cap_lim)
-        Ip = scipy.integrate.quad(p_int, 0., 2*np.pi)
-
-        P = Iz[0]*It[0]*Ip[0]
-        return P
-
-    def eval_tau(self, reg_func):
-        tau = np.zeros((self.nbasis,1))
-        for ni in range(self.nbasis):
-            tau[ni] = self.tau_i(ni, reg_func)
-        return tau
-
-    def tau_i(self, n, reg_func):
-        k, l, m = self.basis_numbers(n)
-        v = self.nu(n)
-
-        z_int = lambda z: np.exp(-0.5*z)*sp.eval_laguerre(k,z)*reg_func(z)*z**2
-        t_int = lambda t: sp.lpmv(m,v,np.cos(t))*np.sin(t)
-        p_int = lambda p: self.Az(v,m,p)
-
-        Iz = scipy.integrate.quad(z_int, 0., self.max_z_int)
-        It = scipy.integrate.quad(t_int, 0., self.cap_lim)
-        Ip = scipy.integrate.quad(p_int, 0., 2*np.pi)
-        T = Iz[0]*It[0]*Ip[0]
-        return T
+    # def grad_basis(self,R):
+    #     # TODO: Needs to be updated
+    #     """
+    #     Calculates a matrix of the gradient of basis functions evaluated at all input points
+    #
+    #     Parameters:
+    #         R: [ndarray(3,npoints)]
+    #             array of input coordinates
+    #             R = [[z coordinates (m)],[theta coordinates (rad)],[phi coordinates (rad)]]
+    #             if input points are expressed as a list of r,t,p points, eg. points = [[r1,t1,p1],[r2,t2,p2],...], R = np.array(points).T
+    #     Returns:
+    #         A: [ndarray(npoints,nbasis,3)]
+    #             array of gradient of basis functions evaluated at all input points
+    #     Notes:
+    #         - Something clever could probably be done to not recalculate the full expression when incrimenting n does not result in a change in k, or similar.
+    #             All the evaluations of special functions here make it one of the slowest parts of the code.
+    #     """
+    #     z = R[0]
+    #     theta = R[1]
+    #     phi = R[2]
+    #     Ag = []
+    #     x = np.cos(theta)
+    #     y = np.sin(theta)
+    #     e = np.exp(-0.5*z)
+    #     for n in range(self.nbasis):
+    #         k, l, m = self.basis_numbers(n)
+    #         v = self.nu(n)
+    #         L0 = sp.eval_laguerre(k,z)
+    #         L1 = sp.eval_genlaguerre(k-1,1,z)
+    #         Pmv = sp.lpmv(m,v,x)
+    #         Pmv1 = sp.lpmv(m,v+1,x)
+    #         A = self.Az(v,m,phi)
+    #         zhat = -0.5*e*(L0+2*L1)*Pmv*A*100./RE
+    #         that = e*L0*(-(v+1)*x*Pmv+(v-m+1)*Pmv1)*A/(y*(z/100.+1)*RE)
+    #         phat = e*L0*Pmv*self.dAz(v,m,phi)/(y*(z/100.+1)*RE)
+    #         Ag.append([zhat,that,phat])
+    #     # print np.shape(np.array(Ag).T)
+    #     return np.array(Ag).T
+    #
+    #
+    # # TODO: Need to actually impliment this with the correct derivatives - currently meaningless
+    # def eval_omega(self):
+    #     omega = np.zeros((self.nbasis,self.nbasis))
+    #     for ni in range(self.nbasis):
+    #         for nj in range(ni, self.nbasis):
+    #             omega[ni,nj]
+    #             O = self.omega_ij(ni, nj)
+    #             omega[ni,nj] = O
+    #             omega[nj,ni] = O
+    #     return omega
+    #
+    # def omega_ij(self,ni,nj):
+    #     ki, li, mi = self.basis_numbers(ni)
+    #     kj, lj, mj = self.basis_numbers(nj)
+    #     vi = self.nu(ni)
+    #     vj = self.nu(nj)
+    #
+    #     z_int = lambda z: np.exp(-1*z)*sp.eval_laguerre(ki,z)*sp.eval_laguerre(kj,z)/z**2
+    #     t_int = lambda t: 1/np.sin(t)**3*(-1*vi*(vi*np.cos(t)**2+vi+1)*sp.lpmv(mi,vi,np.cos(t))+vi*(vi+mi)*np.cos(t)*sp.lpmv(mi,vi-1,np.cos(t))+vi*(vi-mi+1)*np.cos(t)*sp.lpmv(mi,vi+1,np.cos(t)))*(-1*vj*(vj*np.cos(t)**2+vj+1)*sp.lpmv(mj,vj,np.cos(t))+vj*(vj+mj)*np.cos(t)*sp.lpmv(mj,vj-1,np.cos(t))+vj*(vj-mj+1)*np.cos(t)*sp.lpmv(mj,vj+1,np.cos(t)))
+    #     p_int = lambda p: self.Az(vi,mi,p)*self.Az(vj,mj,p)
+    #
+    #     Iz = scipy.integrate.quad(z_int, 0., self.max_z_int)
+    #     It = scipy.integrate.quad(t_int, 0., self.cap_lim)
+    #     Ip = scipy.integrate.quad(p_int, 0., 2*np.pi)
+    #     O = Iz[0]*It[0]*Ip[0]
+    #     return O
+    #
+    #
+    # def eval_psi(self):
+    #     psi = np.zeros((self.nbasis,self.nbasis))
+    #     for ni in range(self.nbasis):
+    #         for nj in range(ni, self.nbasis):
+    #             P = self.psi_ij(ni, nj)
+    #             psi[ni,nj] = P
+    #             psi[nj,ni] = P
+    #     return psi
+    #
+    # def psi_ij(self, ni, nj):
+    #     ki, li, mi = self.basis_numbers(ni)
+    #     kj, lj, mj = self.basis_numbers(nj)
+    #     vi = self.nu(ni)
+    #     vj = self.nu(nj)
+    #
+    #     z_int = lambda z: np.exp(-1*z)*sp.eval_laguerre(ki,z)*sp.eval_laguerre(kj,z)*z**2
+    #     t_int = lambda t: sp.lpmv(mi,vi,np.cos(t))*sp.lpmv(mj,vj,np.cos(t))*np.sin(t)
+    #     p_int = lambda p: self.Az(vi,mi,p)*self.Az(vj,mj,p)
+    #
+    #     Iz = scipy.integrate.quad(z_int, 0., self.max_z_int)
+    #     It = scipy.integrate.quad(t_int, 0., self.cap_lim)
+    #     Ip = scipy.integrate.quad(p_int, 0., 2*np.pi)
+    #
+    #     P = Iz[0]*It[0]*Ip[0]
+    #     return P
+    #
+    # def eval_tau(self, reg_func):
+    #     tau = np.zeros((self.nbasis,1))
+    #     for ni in range(self.nbasis):
+    #         tau[ni] = self.tau_i(ni, reg_func)
+    #     return tau
+    #
+    # def tau_i(self, n, reg_func):
+    #     k, l, m = self.basis_numbers(n)
+    #     v = self.nu(n)
+    #
+    #     z_int = lambda z: np.exp(-0.5*z)*sp.eval_laguerre(k,z)*reg_func(z)*z**2
+    #     t_int = lambda t: sp.lpmv(m,v,np.cos(t))*np.sin(t)
+    #     p_int = lambda p: self.Az(v,m,p)
+    #
+    #     Iz = scipy.integrate.quad(z_int, 0., self.max_z_int)
+    #     It = scipy.integrate.quad(t_int, 0., self.cap_lim)
+    #     Ip = scipy.integrate.quad(p_int, 0., 2*np.pi)
+    #     T = Iz[0]*It[0]*Ip[0]
+    #     return T
 
 
 
@@ -251,35 +251,35 @@ class Model(object):
 
 
 
-    def inverse_transform(self,R0,vec):
-        """
-        Inverse transformation to recover the correct vector components at their original position after
-         calling eval_model().  This is primarially nessisary to get the gradients correct.
-
-        Parameters:
-            R0: [ndarray(3,npoints)]
-                array of points in model coordinates corresponding to the location of each vector in vec
-            vec: [ndarray(npoints,3)]
-                array of vectors in model coordinates
-        Returns:
-            vec_rot: [ndarray(npoints,3)]
-                array of vectors rotated back to original geocenteric coordinates
-        """
-
-        phi0 = self.cp[1]
-        theta0 = -1.*self.cp[0]
-
-        k = np.array([np.cos(phi0+np.pi/2.),np.sin(phi0+np.pi/2.),0.])
-
-        rx, ry, rz = cc.spherical_to_cartesian((R0[0]/100.+1.)*RE,R0[1],R0[2])
-        Rc = np.array([rx,ry,rz])
-        vx, vy, vz = cc.vector_spherical_to_cartesian(vec.T[0],vec.T[1],vec.T[2],(R0[0]/100.+1.)*RE,R0[1],R0[2])
-        vc = np.array([vx,vy,vz])
-
-        rr = np.array([R*np.cos(theta0)+np.cross(k,R)*np.sin(theta0)+k*np.dot(k,R)*(1-np.cos(theta0)) for R in Rc.T]).T
-        vr = np.array([v*np.cos(theta0)+np.cross(k,v)*np.sin(theta0)+k*np.dot(k,v)*(1-np.cos(theta0)) for v in vc.T]).T
-        vr, vt, vp = cc.vector_cartesian_to_spherical(vr[0],vr[1],vr[2],rr[0],rr[1],rr[2])
-
-        vec_rot = np.array([vr,vt,vp]).T
-
-        return vec_rot
+    # def inverse_transform(self,R0,vec):
+    #     """
+    #     Inverse transformation to recover the correct vector components at their original position after
+    #      calling eval_model().  This is primarially nessisary to get the gradients correct.
+    #
+    #     Parameters:
+    #         R0: [ndarray(3,npoints)]
+    #             array of points in model coordinates corresponding to the location of each vector in vec
+    #         vec: [ndarray(npoints,3)]
+    #             array of vectors in model coordinates
+    #     Returns:
+    #         vec_rot: [ndarray(npoints,3)]
+    #             array of vectors rotated back to original geocenteric coordinates
+    #     """
+    #
+    #     phi0 = self.cp[1]
+    #     theta0 = -1.*self.cp[0]
+    #
+    #     k = np.array([np.cos(phi0+np.pi/2.),np.sin(phi0+np.pi/2.),0.])
+    #
+    #     rx, ry, rz = cc.spherical_to_cartesian((R0[0]/100.+1.)*RE,R0[1],R0[2])
+    #     Rc = np.array([rx,ry,rz])
+    #     vx, vy, vz = cc.vector_spherical_to_cartesian(vec.T[0],vec.T[1],vec.T[2],(R0[0]/100.+1.)*RE,R0[1],R0[2])
+    #     vc = np.array([vx,vy,vz])
+    #
+    #     rr = np.array([R*np.cos(theta0)+np.cross(k,R)*np.sin(theta0)+k*np.dot(k,R)*(1-np.cos(theta0)) for R in Rc.T]).T
+    #     vr = np.array([v*np.cos(theta0)+np.cross(k,v)*np.sin(theta0)+k*np.dot(k,v)*(1-np.cos(theta0)) for v in vc.T]).T
+    #     vr, vt, vp = cc.vector_cartesian_to_spherical(vr[0],vr[1],vr[2],rr[0],rr[1],rr[2])
+    #
+    #     vec_rot = np.array([vr,vt,vp]).T
+    #
+    #     return vec_rot

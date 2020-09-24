@@ -254,9 +254,9 @@ class Fit(object):
         # Evaluate coefficient vector
         C = self.eval_C(A,b,W,reg_matrices,reg_params)
 
-        # compute chi^2
-        val = np.squeeze(np.dot(A,C))
-        chi2 = sum((val-np.squeeze(b))**2*np.squeeze(W))
+        # Caluclate chi2
+        val = np.einsum('ji,i->j',A,C)
+        chi2 = sum((val-b)**2*W)
 
         return chi2-nu
 
@@ -453,9 +453,9 @@ class Fit(object):
                 covariance matrix for basis functions
         """
 
-        AWA = np.dot(A.T,W*A)
-        X = np.dot(A.T,W*A)
-        y = np.dot(A.T,W*b)
+        AWA = np.einsum('ji,j,jk->ik',A,W,A)
+        X = AWA.copy()
+        y = np.einsum('ji,j,j->i',A,W,b)
 
         for reg in self.regularization_list:
             X = X + reg_params[reg]*reg_matrices[reg]
@@ -463,7 +463,7 @@ class Fit(object):
 
         if calccov:
             H = scipy.linalg.pinv(X)
-            dC = np.dot(H,np.dot(AWA,H.T))
+            dC = np.einsum('ij,jk,kl->il',H,AWA,H)
             return C, dC
         else:
             return C
@@ -520,8 +520,8 @@ class Fit(object):
             ne0 = ne0[np.isfinite(ne0)]
 
             # define matricies
-            W = np.array(er0**(-2))[:,None]
-            b = ne0[:,None]
+            W = np.array(er0**(-2))
+            b = ne0
             A = self.model.basis(lat0, lon0, alt0)
 
 

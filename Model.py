@@ -132,14 +132,17 @@ class Model(object):
                 All the evaluations of special functions here make it one of the slowest parts of the code.
         """
 
-        z, theta, phi = self.transform_coord(gdlat, gdlon, gdalt)
+        z, theta, phi = self.transform_coord(gdlat.flatten(), gdlon.flatten(), gdalt.flatten())
 
         A = []
         for n in range(self.nbasis):
             k, l, m = self.basis_numbers(n)
             v = self.nu(n)
             A.append(np.exp(-0.5*z)*sp.eval_laguerre(k,z)*self.Az(v,m,phi)*sp.lpmv(m,v,np.cos(theta)))
-        return np.array(A).T
+        nax = list(np.arange(gdlat.ndim)+1)
+        nax.append(0)
+        A0 = np.transpose(np.array(A).reshape((-1,)+gdlat.shape), axes=nax)
+        return A0
 
 
     def grad_basis(self, gdlat, gdlon, gdalt):

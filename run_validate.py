@@ -77,8 +77,7 @@ def validate(starttime, endtime, altitudes):
 
     for i, time in enumerate(raw_time):
 
-        dens = eval.getparam(time,gdlat.flatten(), gdlon.flatten(), gdalt.flatten())
-        dens = dens.reshape(gdlat.shape)
+        dens = eval.getparam(time,gdlat, gdlon, gdalt)
 
         for j, alt in enumerate(altitudes):
 
@@ -111,8 +110,8 @@ def validate(starttime, endtime, altitudes):
 
 def main():
 
-    st = dt.datetime(2016,11,27,22,55)
-    et = dt.datetime(2016,11,27,23,10)
+    st = dt.datetime(2016,11,27,22,45)
+    et = dt.datetime(2016,11,27,22,50)
 
     interp(st,et)
     validate(st, et, np.array([250.,300.,350.,400.,450.])*1000.)

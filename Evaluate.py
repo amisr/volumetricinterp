@@ -110,7 +110,10 @@ class Evaluate(object):
 
         # use einsum to retain shape of input arrays correctly
         A = self.model.basis(gdlat, gdlon, gdalt)
-        parameter = np.reshape(np.dot(A,C),np.shape(A)[0])
+        # print(A.shape, C.shape)
+        parameter = np.einsum('...i,i->...',A,C)
+        # print(parameter.shape)
+        # parameter = np.reshape(np.dot(A,C),np.shape(A)[0])
 
         if check_hull:
             check = self.check_hull(gdlat, gdlon, gdalt)
@@ -162,7 +165,7 @@ class Evaluate(object):
 
         hull = ConvexHull(self.hull_vert)
         check = []
-        for lat, lon, alt in zip(lat0, lon0, alt0):
+        for lat, lon, alt in zip(lat0.ravel(), lon0.ravel(), alt0.ravel()):
             value = False
 
             x, y, z = pm.geodetic2ecef(lat,lon,alt)
@@ -171,7 +174,7 @@ class Evaluate(object):
             if np.array_equal(hull.vertices,new_hull.vertices):
                 value = True
             check.append(value)
-        return np.array(check)
+        return np.array(check).reshape(alt0.shape)
 
     def get_C(self, t):
         """
@@ -188,19 +191,12 @@ class Evaluate(object):
                 covariance matrix
         """
 
-        print(t)
         # find unix time of requested point
         t0 = (t-dt.datetime.utcfromtimestamp(0)).total_seconds()
 
         # find time of mid-points
         mt = np.mean(self.time, axis=1)
 
-        # if t0<np.min(mt) or t0>np.max(mt):
-        #     print('Time out of range!')
-        #     C = np.full(self.nbasis,np.nan)
-        #     dC = np.full((self.nbasis,self.nbasis),np.nan)
-
-        # else:
         try:
             if self.timeinterp:
                 # find index of neighboring points
@@ -222,22 +218,3 @@ class Evaluate(object):
             raise ValueError('Requested time out of range of data file.')
 
         return C, dC
-
-    # def find_index(self, t):
-    #     """
-    #     Find the index of a file that is closest to the given time
-    #
-    #     Parameters:
-    #         t: [datetime object]
-    #             target time
-    #
-    #     Returns:
-    #         rec: [int]
-    #             index of the record that is closest to the target time
-    #     """
-    #
-    #     time0 = (t-dt.datetime.utcfromtimestamp(0)).total_seconds()
-    #     time_array = np.array([(float(ut[0])+float(ut[1]))/2. for ut in self.time])
-    #     rec = np.argmin(np.abs(time_array-time0))
-    #
-    #     return rec
