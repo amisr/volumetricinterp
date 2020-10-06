@@ -3,117 +3,100 @@
 #    at a particular altitude slice.  This is useful for testing how well a particular set of
 #    configuration options does at recreating the density pattern.
 
-import numpy as np
-import datetime as dt
-import h5py
-import pymap3d as pm
-import configparser
-import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
-import cartopy.crs as ccrs
+# import numpy as np
+# import datetime as dt
+# import h5py
+# import pymap3d as pm
+# import configparser
+# import matplotlib.pyplot as plt
+# import matplotlib.gridspec as gridspec
+# import cartopy.crs as ccrs
+#
+# from Fit import Fit
+# from Evaluate import Evaluate
+from Validate import Validate
 
-from Fit import Fit
-from Evaluate import Evaluate
+config_file_help = """Calculate coefficients for volmetric interpolation
+of a scalar quantity in a fitted AMISR file.
 
-def read_config(config_file):
+Requires a configuration file containing the following example format:
 
-    config = configparser.ConfigParser()
-    config.read_file(open(config_file))
+[DEFAULT]
 
-    starttime = dt.datetime.strptime(config.get('VALIDATE','STARTTIME'),'%Y-%m-%dT%H:%M:%S')
-    endtime = dt.datetime.strptime(config.get('VALIDATE','ENDTIME'),'%Y-%m-%dT%H:%M:%S')
-    altitudes = [float(i) for i in config.get('VALIDATE', 'ALTITUDES').split(',')]
-    colorlim = [float(i) for i in config.get('VALIDATE', 'COLORLIM').split(',')]
-    outputpng = config.get('VALIDATE','OUTPNGNAME')
-    outputfilename = config.get('DEFAULT','OUTPUTFILENAME')
+# parameter to be interpolated
+PARAM = dens
 
-    return starttime, endtime, altitudes, colorlim, outputpng, outputfilename
+# input AMISR fitted filename
+FILENAME = 20161127.002_lp_1min-fitcal.h5
 
-def interp(config_file, starttime, endtime):
+# output filename to save the coefficients to
+OUTPUTFILENAME = test_out.h5
 
-    fit = Fit(config_file)
-    fit.fit(starttime=starttime, endtime=endtime)
-    fit.saveh5()
+# list of regularization methods to use (options are '0thorder' and 'curvature')
+REGULARIZATION_LIST = curvature
 
-def validate(starttime, endtime, altitudes, outputfile, outputpng, colorlim):
-    """
-    Creates a basic map of the volumetric reconstruction with the original data at a particular altitude slice to confirm that the reconstruction is reasonable.
-    This function is designed to fit and plot only a small subset of an experiment (between starttime and endtime) so that it can be used to fine-tune parameters
-    without waiting for an entire experiment to be processed
+# the method that should be used to determine the regularization parameter
+REGULARIZATION_METHOD = chi2
 
-    Parameters:
-        starttime: [datetime]
-            start of interval to validate
-        endtime: [datetime]
-            end of interval to validate
-        altitude: [float]
-            altitude of the slice
-        altlim: [float]
-            points that fall +/- altlim from altitude will be plotted on top of reconstructed contours as scatter
-    """
+# only consider points with errors between these limits
+ERRLIM = 1e10,1e13
+
+# only consider points with these fit codes
+GOODFITCODE = 1,2,3,4
+
+# only consider points with chi-squared values in this range
+CHI2LIM = 0.1,10
 
 
-    # initalize Evaluate object
-    eval = Evaluate(outputfile)
+[MODEL]
+# Which model to use
+MODEL = Model
+; MODEL = Model_RBF
 
-    hull_lat, hull_lon, hull_alt = pm.ecef2geodetic(eval.hull_vert[:,0], eval.hull_vert[:,1], eval.hull_vert[:,2])
+# number of radial base functions used
+MAXK = 4
 
-    # set input coordinates
-    gdlat, gdlon, gdalt = np.meshgrid(np.linspace(np.nanmin(hull_lat), np.nanmax(hull_lat), 100), np.linspace(np.nanmin(hull_lon), np.nanmax(hull_lon), 100), altitudes)
+# order of the spherical cap harmionics expansion
+MAXL = 6
 
-    # get original raw data from file
-    with h5py.File(outputfile, 'r') as f:
-        raw_filename = f['/RawData/filename'][()]
+# limit of the cap (degrees)
+CAP_LIM = 10
 
-    with h5py.File(raw_filename, 'r') as f:
-        raw_alt = f['/Geomag/Altitude'][:]
-        raw_lat = f['/Geomag/Latitude'][:]
-        raw_lon = f['/Geomag/Longitude'][:]
+# the maximum z value to use in calculating the integrals for the 0th order regularization matricies
+MAX_Z_INT = INF
 
-        utime = f['Time/UnixTime'][:]
-        idx = np.argwhere((utime[:,0]>=(starttime-dt.datetime.utcfromtimestamp(0)).total_seconds()) & (utime[:,1]<=(endtime-dt.datetime.utcfromtimestamp(0)).total_seconds())).flatten()
-        raw_time = np.array([dt.datetime.utcfromtimestamp(t) for t in np.mean(utime, axis=1)[idx]])
-        raw_dens = f['FittedParams/Ne'][idx,:,:]
+LATCP = 78
 
+LONCP = 262
 
-    # setup figure
-    fig = plt.figure(figsize=(len(altitudes)*2,len(raw_time)*2))
-    gs = gridspec.GridSpec(len(raw_time), len(altitudes))
-    gs.update(left=0.05,right=0.9,bottom=0.01,top=0.95)
-    map_proj = ccrs.LambertConformal(central_latitude=np.nanmean(hull_lat), central_longitude=np.nanmean(hull_lon))
+EPS = 100000.0
 
+LATRANGE = 74,80
 
-    for i, time in enumerate(raw_time):
+LONRANGE = 260,285
 
-        dens = eval.getparam(time,gdlat, gdlon, gdalt)
+ALTRANGE = 100,600
 
-        for j, alt in enumerate(altitudes):
+NUMGRIDPNT = 7
 
-            # find index closeset to the projection altitude
-            aidx = np.nanargmin(np.abs(raw_alt-alt),axis=1)
-            rlat = raw_lat[tuple(np.arange(raw_alt.shape[0])),tuple(aidx)]
-            rlon = raw_lon[tuple(np.arange(raw_alt.shape[0])),tuple(aidx)]
-            rdens = raw_dens[i,tuple(np.arange(raw_alt.shape[0])),tuple(aidx)]
+[VALIDATE]
+# start time for Validation (ISO format)
+STARTTIME = 2016-11-27T22:45:00
 
-            # create plot
-            ax = fig.add_subplot(gs[i,j], projection=map_proj)
-            ax.coastlines()
-            ax.gridlines()
+# endtime for Validation (ISO format)
+ENDTIME = 2016-11-27T22:50:00
 
-            # plot density contours from RISR
-            c = ax.contourf(gdlon[:,:,j], gdlat[:,:,j], dens[:,:,j], np.linspace(colorlim[0],colorlim[1],31), extend='both', transform=ccrs.PlateCarree())
-            ax.scatter(rlon, rlat, c='white', s=20, transform=ccrs.Geodetic())
-            ax.scatter(rlon, rlat, c=rdens, s=10, vmin=colorlim[0], vmax=colorlim[1], transform=ccrs.Geodetic())
-            ax.set_title('{} km'.format(alt/1000.))
+# list of altitudes to plot (km)
+ALTITUDES = 250.0,300.0,350.0,400.0,450.0
 
-        # plot time labels and colorbars
-        pos = ax.get_position()
-        plt.text(0.03,(pos.y0+pos.y1)/2.,time.time(),rotation='vertical',verticalalignment='center',horizontalalignment='center',transform=fig.transFigure)
-        cax = fig.add_axes([0.91,pos.y0,0.03,pos.height])
-        cbar = plt.colorbar(c, cax=cax)
-        cbar.set_label(r'Ne (m$^{-3}$)')
+# colorbar limits
+COLORLIM = 0.0,5.0e11
 
-    plt.savefig(outputpng)
+# output png name for validate plots
+OUTPNGNAME = test_fig.png
+
+"""
+
 
 
 def main():
@@ -125,12 +108,10 @@ def main():
     arg = parser.add_argument('config_file',help='A configuration file.')
 
     args = vars(parser.parse_args())
-    config_file = args['config_file']
 
-    starttime, endtime, altitudes, colorlim, outputpng, outputfilename = read_config(config_file)
-
-    interp(config_file, starttime, endtime)
-    validate(starttime, endtime, np.array(altitudes)*1000., outputfilename, outputpng, colorlim)
+    valid = Validate(args['config_file'])
+    valid.interp()
+    valid.validate()
 
 
 if __name__ == '__main__':
