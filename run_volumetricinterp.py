@@ -1,6 +1,6 @@
 # run_volumetric_interp.py
 
-from Interpolate import Interpolate
+from interpolate import Interpolate
 
 config_file_help = """Calculate coefficients for volmetric interpolation
 of a scalar quantity in a fitted AMISR file.

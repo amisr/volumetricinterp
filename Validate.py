@@ -9,8 +9,8 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import cartopy.crs as ccrs
 
-from Interpolate import Interpolate
-from Estimate import Estimate
+from interpolate import Interpolate
+from estimate import Estimate
 
 
 class Validate(object):

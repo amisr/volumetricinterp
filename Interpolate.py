@@ -58,7 +58,7 @@ class Interpolate(object):
         self.configfile = config_file
         self.read_config(self.configfile)
 
-        m = importlib.import_module('Models.'+self.model_name)
+        m = importlib.import_module('models.'+self.model_name)
         self.model = m.Model(open(self.configfile))
 
     def read_config(self, config_file):

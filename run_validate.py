@@ -3,18 +3,9 @@
 #    at a particular altitude slice.  This is useful for testing how well a particular set of
 #    configuration options does at recreating the density pattern.
 
-# import numpy as np
-# import datetime as dt
-# import h5py
-# import pymap3d as pm
-# import configparser
-# import matplotlib.pyplot as plt
-# import matplotlib.gridspec as gridspec
-# import cartopy.crs as ccrs
-#
-# from Fit import Fit
-# from Evaluate import Evaluate
-from Validate import Validate
+from validate import Validate
+
+description = "Calculate coefficients for volmetric interpolation of a scalar quantity in a fitted AMISR file."
 
 config_file_help = """Calculate coefficients for volmetric interpolation
 of a scalar quantity in a fitted AMISR file.
@@ -50,8 +41,7 @@ CHI2LIM = 0.1,10
 
 [MODEL]
 # Which model to use
-MODEL = Model
-; MODEL = Model_RBF
+MODEL = sphharmlag
 
 # number of radial base functions used
 MAXK = 4
@@ -104,8 +94,8 @@ def main():
     from argparse import ArgumentParser, RawDescriptionHelpFormatter
 
     # Build the argument parser tree
-    parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter)
-    arg = parser.add_argument('config_file',help='A configuration file.')
+    parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter, description=description)
+    arg = parser.add_argument('config_file',help=config_file_help)
 
     args = vars(parser.parse_args())
 

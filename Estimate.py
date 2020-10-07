@@ -45,7 +45,7 @@ class Estimate(object):
         self.model_name = config.get('MODEL', 'NAME')
         config_file.seek(0)
 
-        m = importlib.import_module('Models.'+self.model_name)
+        m = importlib.import_module('models.'+self.model_name)
         self.model = m.Model(config_file)
 
 
