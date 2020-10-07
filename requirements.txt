@@ -1,0 +1,5 @@
+numpy >= 1.16
+tables >= 3.3.0
+scipy >= 1.2
+pymap3d >= 1.8.0
+h5py >= 2.9.0
