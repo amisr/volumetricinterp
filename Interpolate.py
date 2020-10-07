@@ -13,7 +13,7 @@ import os
 import pymap3d as pm
 
 
-class Fit(object):
+class Interpolate(object):
     """
     This class performs the least-squares fit of the data to the 3D analytic model to find the coefficient vector for the model.
     It also handles calculating regularization matricies and parameters if nessisary.
@@ -469,7 +469,7 @@ class Fit(object):
             return C
 
 
-    def fit(self, starttime=None, endtime=None):
+    def calc_coeffs(self, starttime=None, endtime=None):
         """
         Perform fit on every record in file.
 
@@ -493,7 +493,7 @@ class Fit(object):
                 raise e
 
         # read data from AMISR fitted file
-        utime, lat, lon, alt, value, error = self.get_data(self.filename)
+        utime, lat, lon, alt, value, error = self.read_datafile(self.filename)
 
         # compute hull that surrounds data
         self.compute_hull(lat, lon, alt)
@@ -579,7 +579,7 @@ class Fit(object):
         self.chi_sq = np.array(chi_sq)
 
 
-    def get_data(self,filename):
+    def read_datafile(self,filename):
         """
         Read a processed AMISR hdf5 file and return the time, coordinates, values, and errors as arrays.
 

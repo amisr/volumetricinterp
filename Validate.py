@@ -9,8 +9,8 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import cartopy.crs as ccrs
 
-from Fit import Fit
-from Evaluate import Evaluate
+from Interpolate import Interpolate
+from Estimate import Estimate
 
 
 class Validate(object):
@@ -50,18 +50,18 @@ class Validate(object):
 
         # return starttime, endtime, altitudes, colorlim, outputpng, outputfilename
 
-    def interp(self):
+    def interpolate(self):
         """
         Perform interpolation with standard procedure using Fit class.
         """
 
-        fit = Fit(self.configfile)
-        fit.fit(starttime=self.starttime, endtime=self.endtime)
-        fit.saveh5()
-        self.outputfilename = fit.outputfilename
+        interp = Interpolate(self.configfile)
+        interp.calc_coeffs(starttime=self.starttime, endtime=self.endtime)
+        interp.saveh5()
+        self.outputfilename = interp.outputfilename
 
     # def validate(starttime, endtime, altitudes, outputfile, outputpng, colorlim):
-    def validate(self):
+    def create_plots(self):
         """
         Creates a basic map of the volumetric reconstruction with the original data at a particular altitude slice to confirm that the reconstruction is reasonable.
         This function is designed to fit and plot only a small subset of an experiment (between starttime and endtime) so that it can be used to fine-tune parameters
@@ -70,9 +70,9 @@ class Validate(object):
 
 
         # initalize Evaluate object
-        eval = Evaluate(self.outputfilename)
+        est_param = Estimate(self.outputfilename)
 
-        hull_lat, hull_lon, hull_alt = pm.ecef2geodetic(eval.hull_vert[:,0], eval.hull_vert[:,1], eval.hull_vert[:,2])
+        hull_lat, hull_lon, hull_alt = pm.ecef2geodetic(est_param.hull_vert[:,0], est_param.hull_vert[:,1], est_param.hull_vert[:,2])
 
         # set input coordinates
         gdlat, gdlon, gdalt = np.meshgrid(np.linspace(np.nanmin(hull_lat), np.nanmax(hull_lat), 100), np.linspace(np.nanmin(hull_lon), np.nanmax(hull_lon), 100), np.array(self.altitudes)*1000.)
@@ -101,7 +101,7 @@ class Validate(object):
 
         for i, time in enumerate(raw_time):
 
-            dens = eval.getparam(time,gdlat, gdlon, gdalt)
+            dens = est_param(time,gdlat, gdlon, gdalt)
 
             for j, alt in enumerate(self.altitudes):
 

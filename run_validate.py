@@ -109,9 +109,9 @@ def main():
 
     args = vars(parser.parse_args())
 
-    valid = Validate(args['config_file'])
-    valid.interp()
-    valid.validate()
+    validate = Validate(args['config_file'])
+    validate.interpolate()
+    validate.create_plots()
 
 
 if __name__ == '__main__':
