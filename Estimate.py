@@ -42,10 +42,10 @@ class Estimate(object):
 
         config = configparser.ConfigParser()
         config.read_file(config_file)
-        self.model_name = config.get('MODEL', 'MODEL')
-
+        self.model_name = config.get('MODEL', 'NAME')
         config_file.seek(0)
-        m = importlib.import_module(self.model_name)
+
+        m = importlib.import_module('Models.'+self.model_name)
         self.model = m.Model(config_file)
 
 

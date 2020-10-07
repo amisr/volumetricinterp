@@ -58,7 +58,7 @@ class Interpolate(object):
         self.configfile = config_file
         self.read_config(self.configfile)
 
-        m = importlib.import_module(self.model_name)
+        m = importlib.import_module('Models.'+self.model_name)
         self.model = m.Model(open(self.configfile))
 
     def read_config(self, config_file):
@@ -85,7 +85,7 @@ class Interpolate(object):
         self.chi2lim = [float(i) for i in config.get('DEFAULT', 'CHI2LIM').split(',')]
         self.goodfitcode = [int(i) for i in config.get('DEFAULT', 'GOODFITCODE').split(',')]
 
-        self.model_name = config.get('MODEL', 'MODEL')
+        self.model_name = config.get('MODEL', 'NAME')
 
 
 
