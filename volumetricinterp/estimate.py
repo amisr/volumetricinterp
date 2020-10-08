@@ -10,7 +10,7 @@ import importlib
 import pymap3d as pm
 
 
-class Evaluate(object):
+class Estimate(object):
     """
     This class evaluates the 3D analytic model to return interpolated parameters within an AMISR FoV.  It is initalized with
     an interpolation coefficient filename, then parameters can be evaluated at a particular time and location.
@@ -42,10 +42,11 @@ class Evaluate(object):
 
         config = configparser.ConfigParser()
         config.read_file(config_file)
-        self.model_name = config.get('MODEL', 'MODEL')
-
+        self.model_name = config.get('MODEL', 'NAME')
         config_file.seek(0)
-        m = importlib.import_module(self.model_name)
+
+        # m = importlib.import_module('models.'+self.model_name)
+        m = importlib.import_module('.models.'+self.model_name, package='volumetricinterp')
         self.model = m.Model(config_file)
 
 
@@ -71,7 +72,7 @@ class Evaluate(object):
 
 
 
-    def getparam(self,time,gdlat,gdlon,gdalt,calcgrad=False,calcerr=False,check_hull=True):
+    def __call__(self,time,gdlat,gdlon,gdalt,calcgrad=False,calcerr=False,check_hull=True):
         """
         Fully calculates parameters and their gradients given input coordinates and a time.
         This is the main function that is used to retrieve reconstructed parameters.
