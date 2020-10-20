@@ -59,7 +59,7 @@ class Validate(object):
         interp.calc_coeffs(starttime=self.starttime, endtime=self.endtime)
         interp.saveh5()
         self.outputfilename = interp.outputfilename
-
+        
     # def validate(starttime, endtime, altitudes, outputfile, outputpng, colorlim):
     def create_plots(self):
         """

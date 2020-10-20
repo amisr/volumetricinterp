@@ -23,10 +23,15 @@ Perform fitting on an AMISR datafile
 3. To run the validation script, use the `--validate` flag:
   $ volumetricinterp --validate config.ini
 
+volumetricinterp --spectrum config.ini
+
 Estimate interpolated values from coefficient file
 --------------------------------------------------
 1. Import the Estimate module:
-  from volumetricinterp import Estimate
+from volumetricinterp import Estimate
+#lvg. Import other stuff:
+import numpy as np
+import datetime as dt
 2. Initialize an Estimate object with the coefficient file name:
   est_params = Estimate('output_coefficient_file.h5')
 3. Call the Estimate object to get electron density at provided geodetic coordinates:

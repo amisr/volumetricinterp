@@ -1,12 +1,12 @@
-# run_validate.py
+# run_spectrum.py
 # This script uses the validate method of Fit to plot the results of a volumetric interpolation
 #    at a particular altitude slice.  This is useful for testing how well a particular set of
 #    configuration options does at recreating the density pattern.
-import sys
-from .validate import Validate
+
+from .spectrum import Spectrum
 
 description = "Calculate coefficients for volmetric interpolation of a scalar quantity in a fitted AMISR file."
-sys.exit('hi')
+
 with open('example_config.ini', 'r') as f:
     config_file_help = f.readlines()
 
@@ -23,9 +23,9 @@ def main():
 
     args = vars(parser.parse_args())
 
-    validate = Validate(args['config_file'])
-    validate.interpolate()
-    validate.create_plots()
+    spectrum = Spectrum(args['config_file'])
+    spectrum.interpolate()
+    spectrum.create_plots()
 
 
 if __name__ == '__main__':

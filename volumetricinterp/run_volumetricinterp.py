@@ -2,6 +2,7 @@
 
 from .interpolate import Interpolate
 from .validate import Validate
+from .spectrum import Spectrum#lvg
 
 description = "Calculate coefficients for volmetric interpolation of a scalar quantity in a fitted AMISR file."
 
@@ -19,6 +20,7 @@ def main():
     parser = ArgumentParser(description=description, formatter_class=RawTextHelpFormatter)
     arg = parser.add_argument('config_file',help=config_file_help)
     arg = parser.add_argument('--validate', action='store_true')
+    arg = parser.add_argument('--spectrum', action='store_true')#lvg
 
     args = vars(parser.parse_args())
 
@@ -29,6 +31,10 @@ def main():
         validate = Validate(args['config_file'])
         validate.interpolate()
         validate.create_plots()
+    elif args['spectrum']: #lvg
+        spectrum = Spectrum(args['config_file']) #lvg
+        spectrum.interpolate() #lvg
+        spectrum.create_plots() #lvg
     else:
         interp = Interpolate(args['config_file'])
         interp.calc_coeffs()
