@@ -170,48 +170,16 @@ class Interpolate(object):
         """
 
         # Set nu
-        scale_factors = [0.6,0.7,0.8,0.9,1.0]
-#         scale_factors = [1.0]
-        N = len(b)
-#         N = A.shape[0]-A.shape[1]
-#         print(N,A.shape)
-        bracket = False
+        nu = A.shape[0]-A.shape[1]
 
-        for sf in scale_factors:
-            nu = N*sf
-            # nu = N*1.
+        # alpha = np.arange(-100.,0.,0.1)
+        # val = [self.chi2objfunct(a,A,b,W,reg_matrices,nu,reg) for a in alpha]
+        # import matplotlib.pyplot as plt
+        # plt.plot(alpha,val)
+        # plt.show()
 
-            # Determine the bracketing interval for the root (between 1e0 and 1e-100)
-            alpha0 = 0.
-            val0 = 1.
-            alpha = 0.
-            val = self.chi2objfunct(alpha,A,b,W,reg_matrices,nu,reg)
-            if val<0:
-                print('Too smooth to find regularization parameter. Returning alpha=0.')
-                return 0
-
-            while val0*val > 0:
-                # print val0, val
-                bracket = True
-                # nu = N*scale_factor
-                val0 = val
-                alpha0 = alpha
-                alpha = alpha - 1.
-                val = self.chi2objfunct(alpha,A,b,W,reg_matrices,nu,reg)
-                if alpha < -100.:
-                    bracket = False
-                    break
-            if bracket:
-                break
-            else:
-                continue
-
-
-        if not bracket:
-            raise ValueError('Could not find any roots to the objective function chi^2-nu in the range (1e-100,1).')
-        else:
-            # Use the Brent (1973) method to find the root within the bracketing interval found above
-            solution = scipy.optimize.brentq(self.chi2objfunct,alpha,alpha0,args=(A,b,W,reg_matrices,nu,reg),disp=True)
+        # Use the Brent (1973) method to find the root within the bracketing interval found above
+        solution = scipy.optimize.brentq(self.chi2objfunct,-100.,0.,args=(A,b,W,reg_matrices,nu,reg),disp=True)
 
         reg_param = np.power(10.,solution)
 
@@ -257,6 +225,7 @@ class Interpolate(object):
         # Caluclate chi2
         val = np.einsum('ji,i->j',A,C)
         chi2 = sum((val-b)**2*W)
+        # print(chi2,nu)
 
         return chi2-nu
 
@@ -553,6 +522,8 @@ class Interpolate(object):
 
             # calculate regularization parameters
             reg_params = self.find_reg_param(A,b,W,reg_matricies,method=self.reg_method)
+            print(reg_params)
+            # reg_params = {'curvature':0.0}
 
             # if regularization parameters are NaN, skip this record - fit can not be computed
             if np.any(np.isnan([v for v in reg_params.values()])):
@@ -567,6 +538,7 @@ class Interpolate(object):
 
             # calculate chi2
             c2 = sum((np.squeeze(np.dot(A,C))-np.squeeze(b))**2*np.squeeze(W))
+            print(c2)
 
             # append lists
             Coeffs.append(C)
