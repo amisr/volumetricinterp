@@ -214,7 +214,7 @@
                         K_{\nu |m|}\cos(|m|\phi) & m < 0 \\
                         0 & m = 0 \\
                         K_{\nu m}\sin(m\phi) & m > 0
-                      \end{cases}    
+                      \end{cases}
   \end{equation}
 
 
@@ -247,7 +247,7 @@
   \end{equation}
   \(\mat{A}\) and \(\vec{c}\) have been defined previously in Equation \ref{eqn:defcA}.
 
-  The solution to Equation \ref{eqn:noreg} can be expressed in closed form by multiplying both sides by the inverse of \(\mat{A}^\dagger\mat{W}\mat{A}\). 
+  The solution to Equation \ref{eqn:noreg} can be expressed in closed form by multiplying both sides by the inverse of \(\mat{A}^\dagger\mat{W}\mat{A}\).
   \begin{equation}
     \vec{c} = (\mat{A}^\dagger\mat{W}\mat{A})^{-1}\mat{A}^\dagger\mat{W}\vec{d}
   \end{equation}
@@ -467,7 +467,7 @@
   \end{equation}
   Apply this to the first term in the general Laplacian equation.
   \begin{align}
-    \frac{1}{r}\frac{\partial}{\partial r}\left(r^2 \frac{\partial B_n}{\partial r}\right) &= \frac{\partial}{\partial z}\left(r^2 \frac{\partial B_n}{\partial z}\frac{\partial z}{\partial r}\right) \frac{\partial z}{\partial r} \frac{1}{r} \\
+    \frac{1}{r^2}\frac{\partial}{\partial r}\left(r^2 \frac{\partial B_n}{\partial r}\right) &= \frac{\partial}{\partial z}\left(r^2 \frac{\partial B_n}{\partial z}\frac{\partial z}{\partial r}\right) \frac{\partial z}{\partial r} \frac{1}{r} \\
     &= \left[2r\frac{\partial r}{\partial z}\left(\frac{\partial B_n}{\partial z}\frac{\partial z}{\partial r}\right) + r^2\frac{\partial^2 B_n}{\partial z^2}\frac{\partial z}{\partial r}\right]\frac{\partial z}{\partial r}\frac{1}{r} \\
     &= \left(\frac{\partial z}{\partial r}\right)^2\frac{1}{r}\left[2\frac{\partial r}{\partial z}\frac{\partial B_n}{\partial z} + r\frac{\partial^2 B_n}{\partial z^2}\right]
   \end{align}
@@ -483,7 +483,7 @@
   \end{align}
   Substitute the expressions for the basis function derivatives back into the first term of the Laplacian.
   \begin{equation}
-    \frac{1}{r}\frac{\partial}{\partial r}\left(r^2\frac{\partial B_n}{\partial r}\right) = \left(\frac{100}{R_E}\right)^2\frac{1}{r}\left[2\left(\frac{R_E}{100}\right)\frac{\partial Z}{\partial z} + r\frac{\partial^2 Z}{\partial z^2}\right]P_\nu^m(\cos\theta) A_{\nu m}(\phi)
+    \frac{1}{r^2}\frac{\partial}{\partial r}\left(r^2\frac{\partial B_n}{\partial r}\right) = \left(\frac{100}{R_E}\right)^2\frac{1}{r}\left[2\left(\frac{R_E}{100}\right)\frac{\partial Z}{\partial z} + r\frac{\partial^2 Z}{\partial z^2}\right]P_\nu^m(\cos\theta) A_{\nu m}(\phi)
   \end{equation}
 
   Consider the second term in the Laplacian
@@ -508,7 +508,7 @@
   \end{align}
   For simplicity, define the function \(\Theta(\theta)\).
   \begin{align}
-    &\Theta(\theta) = \frac{1}{\sin\theta}\frac{\partial}{\partial\theta}\left(\sin\theta\frac{\partial P_\nu^m}{\partial\theta}\right) \\
+    &\Theta(\theta) = \frac{1}{\sin^2\theta}\frac{\partial}{\partial\theta}\left(\sin\theta\frac{\partial P_\nu^m}{\partial\theta}\right) \\
     &= \frac{1}{\sin\theta}\left[(m^2-\nu^2(\cos^2\theta+1)-\nu)P_\nu^m(\cos\theta)+\nu(\nu+m)\cos\theta P_{\nu-1}^m(\cos\theta)+\nu(\nu-m+1)\cos\theta P_{\nu+1}^m(\cos\theta)\right]
   \end{align}
   In this way, the second term of the Laplacian becomes
@@ -523,10 +523,10 @@
   \end{align}
   Take the first and second derivatives of \(A_{\nu m}\).
   \begin{align}
-    \parder{A_{\nu m}}{\phi} &= -m \begin{cases}
+    \parder{A_{\nu m}}{\phi} &= m \begin{cases}
                         K_{\nu |m|}\cos(|m|\phi) & m < 0 \\
                         0 & m = 0 \\
-                        K_{\nu m}\sin(m\phi) & m > 0
+                        -K_{\nu m}\sin(m\phi) & m > 0
                       \end{cases} \\
     \pardder{A_{\nu m}}{\phi} &= -m^2 \begin{cases}
                         K_{\nu |m|}\sin(|m|\phi) & m < 0 \\
@@ -569,7 +569,7 @@
     &\Theta'_{\nu m}(\theta) = \Theta - \frac{m^2}{\sin^2\theta}P_\nu^m(\cos\theta) \\
     &= \frac{1}{\sin^2\theta}\left[-\nu\left(\nu\cos^2\theta+\nu+1\right)P_\nu^m(\cos\theta)+\nu(\nu+m)\cos\theta P_{\nu-1}^m(\cos\theta)+\nu(\nu-m+1)\cos\theta P_{\nu+1}^m(\cos\theta)\right]
   \end{align}
-  
+
 
   \bibliographystyle{apalike}
   \bibliography{bibliography}
