@@ -195,22 +195,57 @@ class Model(object):
                 omega[nj,ni] = O
         return omega
 
-    def omega_ij(self,ni,nj):
+    # def omega_ij(self,ni,nj):
+    #     ki, li, mi = self.basis_numbers(ni)
+    #     kj, lj, mj = self.basis_numbers(nj)
+    #     vi = self.nu(ni)
+    #     vj = self.nu(nj)
+    #
+    #     z_int = lambda z: np.exp(-1*z)*sp.eval_laguerre(ki,z)*sp.eval_laguerre(kj,z)/z**2
+    #     t_int = lambda t: 1/np.sin(t)**3*(-1*vi*(vi*np.cos(t)**2+vi+1)*sp.lpmv(mi,vi,np.cos(t))+vi*(vi+mi)*np.cos(t)*sp.lpmv(mi,vi-1,np.cos(t))+vi*(vi-mi+1)*np.cos(t)*sp.lpmv(mi,vi+1,np.cos(t)))*(-1*vj*(vj*np.cos(t)**2+vj+1)*sp.lpmv(mj,vj,np.cos(t))+vj*(vj+mj)*np.cos(t)*sp.lpmv(mj,vj-1,np.cos(t))+vj*(vj-mj+1)*np.cos(t)*sp.lpmv(mj,vj+1,np.cos(t)))
+    #     p_int = lambda p: self.Az(vi,mi,p)*self.Az(vj,mj,p)
+    #
+    #     # import matplotlib.pyplot as plt
+    #     # parr = np.linspace(0.,2*np.pi,100)
+    #     # plt.plot(parr, p_int(parr))
+    #     # plt.show()
+    #
+    #     Iz = scipy.integrate.quad(z_int, 0., self.max_z_int)
+    #     It = scipy.integrate.quad(t_int, 0., self.cap_lim)
+    #     Ip = scipy.integrate.quad(p_int, 0., 2*np.pi)
+    #     O = Iz[0]*It[0]*Ip[0]
+    #     return O
+
+    def omega_ij(self, ni, nj):
+
+        def P(v,m,t):
+            return sp.lpmv(m,v,np.cos(t))
+
+        def L(k,z):
+            return(sp.eval_laguerre(k,z))
+
+        def T(v,m,t):
+            return -m*(m-1)*sp.lpmv(m,v,np.cos(t)) + 2*(m-1)*(v+m)*(v+m-1)*np.cos(t)/np.sin(t)*sp.lpmv(m-1,v,np.cos(t)) + (v+m)*(v+m-1)**2*(v+m-2)*sp.lpmv(m-2,v,np.cos(t))
+
+        def Z(k,z):
+            return 1/(2*RE*z)*((4*RE*z*k-2*RE*z**2-k+z/2-2*k/z+2*k**2/z)*sp.eval_laguerre(k,z) + (-4*RE*z*k+4*k/z-4*k**2/z+k)*sp.eval_laguerre(k-1,z) + 2*k*(k-1)/z*sp.eval_laguerre(k-2,z))
+
         ki, li, mi = self.basis_numbers(ni)
         kj, lj, mj = self.basis_numbers(nj)
         vi = self.nu(ni)
         vj = self.nu(nj)
 
-        z_int = lambda z: np.exp(-1*z)*sp.eval_laguerre(ki,z)*sp.eval_laguerre(kj,z)/z**2
-        t_int = lambda t: 1/np.sin(t)**3*(-1*vi*(vi*np.cos(t)**2+vi+1)*sp.lpmv(mi,vi,np.cos(t))+vi*(vi+mi)*np.cos(t)*sp.lpmv(mi,vi-1,np.cos(t))+vi*(vi-mi+1)*np.cos(t)*sp.lpmv(mi,vi+1,np.cos(t)))*(-1*vj*(vj*np.cos(t)**2+vj+1)*sp.lpmv(mj,vj,np.cos(t))+vj*(vj+mj)*np.cos(t)*sp.lpmv(mj,vj-1,np.cos(t))+vj*(vj-mj+1)*np.cos(t)*sp.lpmv(mj,vj+1,np.cos(t)))
-        p_int = lambda p: self.Az(vi,mi,p)*self.Az(vj,mj,p)
+        I1 = scipy.integrate.quad(lambda p: self.Az(vi,mi,p)*self.Az(vj,mj,p), 0., 2*np.pi)
+        I2 = scipy.integrate.quad(lambda t: P(vi,mi,t)*P(vj,mj,t)*np.sin(t), 0., self.cap_lim)
+        I3 = scipy.integrate.quad(lambda z: Z(ki,z)*Z(kj,z)*np.exp(-z)/(RE*z**2), 1., np.inf)
+        I4 = scipy.integrate.quad(lambda t: P(vi,mi,t)*T(vj,mj,t)*np.sin(t), 0., self.cap_lim)
+        I5 = scipy.integrate.quad(lambda z: Z(ki,z)*L(kj,z)*np.exp(-z)/(RE*z**2), 1., np.inf)
+        I6 = scipy.integrate.quad(lambda t: T(vi,mi,t)*P(vj,mj,t)*np.sin(t), 0., self.cap_lim)
+        I7 = scipy.integrate.quad(lambda z: L(ki,z)*Z(kj,z)*np.exp(-z)/(RE*z**2), 1., np.inf)
+        I8 = scipy.integrate.quad(lambda t: T(vi,mi,t)*T(vj,mj,t)*np.sin(t), 0., self.cap_lim)
+        I9 = scipy.integrate.quad(lambda z: L(ki,z)*L(kj,z)*np.exp(-z)/(RE*z**2), 1., np.inf)
 
-        Iz = scipy.integrate.quad(z_int, 0., self.max_z_int)
-        It = scipy.integrate.quad(t_int, 0., self.cap_lim)
-        Ip = scipy.integrate.quad(p_int, 0., 2*np.pi)
-        O = Iz[0]*It[0]*Ip[0]
-        return O
-
+        return I1[0]*(I2[0]*I3[0]+I4[0]*I5[0]+I6[0]*I7[0]+I8[0]*I9[0])
 
     def eval_psi(self):
         psi = np.zeros((self.nbasis,self.nbasis))
@@ -356,7 +391,8 @@ class Model(object):
         t = np.arccos(Rr[2]/r)
         p = np.arctan2(Rr[1],Rr[0])
 
-        return 100*(r/RE-1), t, p
+        # return 100*(r/RE-1), t, p
+        return r/RE, t, p
 
 
 

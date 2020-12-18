@@ -170,7 +170,9 @@ class Interpolate(object):
         """
 
         # Set nu
-        nu = A.shape[0]-A.shape[1]
+        # nu = A.shape[0]-A.shape[1]
+        nu = A.shape[0]
+        # nu = 0.
 
         # alpha = np.arange(-100.,0.,0.1)
         # val = [self.chi2objfunct(a,A,b,W,reg_matrices,nu,reg) for a in alpha]
