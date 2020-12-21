@@ -255,15 +255,22 @@ class Interpolate(object):
                 guess later, possibly having different initial guesses for density and temperature.
         """
 
-        # Set initial guess
-        alpha0 = -20.
+        alpha = np.arange(-40.,-20.,0.1)
+        val = [self.gcvobjfunct(a,A,b,W,reg_matrices,reg) for a in alpha]
+        import matplotlib.pyplot as plt
+        plt.plot(alpha,val)
+        plt.show()
 
-        # Use the Nelder-Mead method to find the minimum of the GCV objective function
-        solution = scipy.optimize.minimize(self.gcvobjfunct,alpha0,args=(A,b,W,reg_matrices,reg),method='Nelder-Mead')
-        if not solution.success:
-            raise ValueError('Minima of GCV function could not be found')
-
-        reg_param = np.power(10.,solution.x[0])
+        # # Set initial guess
+        # alpha0 = -20.
+        #
+        # # Use the Nelder-Mead method to find the minimum of the GCV objective function
+        # solution = scipy.optimize.minimize(self.gcvobjfunct,alpha0,args=(A,b,W,reg_matrices,reg),method='Nelder-Mead')
+        # if not solution.success:
+        #     raise ValueError('Minima of GCV function could not be found')
+        #
+        # reg_param = np.power(10.,solution.x[0])
+        reg_param = 0.
 
         return reg_param
 
@@ -301,25 +308,40 @@ class Interpolate(object):
                 reg_params[rl] = 0.
 
         residuals = []
-        for i in range(len(b0)):
-            # Pull one data point out of arrays
-            # data point in question:
-            Ai = A0[i,:]
-            bi = b0[i]
-            Wi = W0[i]
-            # arrays minus one data point:
-            A = np.delete(A0,i,0)
-            b = np.delete(b0,i,0)
-            W = np.delete(W0,i,0)
+        for i in range(10):
+            ri = np.random.randint(len(b0), size=int(0.1*len(b0)))
+            A = np.delete(A0,ri,0)
+            b = np.delete(b0,ri,0)
+            W = np.delete(W0,ri,0)
 
             # Evaluate coefficient vector
             C = self.eval_C(A,b,W,reg_matrices,reg_params)
 
-            # Calculate residual for the data point not included in the fit
-            val = np.squeeze(np.dot(Ai,C))
-            residuals.append((val-bi)**2*Wi)
+            # Caluclate chi2
+            val = np.einsum('ji,i->j',A0,C)
+            residuals.append(sum((val-b0)**2*W0))
 
-        return sum(residuals)
+
+        # for i in range(len(b0)):
+        #     print(alpha,i,'/',len(b0))
+        #     # Pull one data point out of arrays
+        #     # data point in question:
+        #     Ai = A0[i,:]
+        #     bi = b0[i]
+        #     Wi = W0[i]
+        #     # arrays minus one data point:
+        #     A = np.delete(A0,i,0)
+        #     b = np.delete(b0,i,0)
+        #     W = np.delete(W0,i,0)
+        #
+        #     # Evaluate coefficient vector
+        #     C = self.eval_C(A,b,W,reg_matrices,reg_params)
+        #
+        #     # Calculate residual for the data point not included in the fit
+        #     val = np.squeeze(np.dot(Ai,C))
+        #     residuals.append((val-bi)**2*Wi)
+
+        return np.mean(residuals)
 
     def manual(self,A,b,W,Omega,Psi,Tau,reg):
         """
