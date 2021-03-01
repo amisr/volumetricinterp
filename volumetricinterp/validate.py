@@ -76,6 +76,7 @@ class Validate(object):
 
         # set input coordinates
         gdlat, gdlon, gdalt = np.meshgrid(np.linspace(np.nanmin(hull_lat), np.nanmax(hull_lat), 100), np.linspace(np.nanmin(hull_lon), np.nanmax(hull_lon), 100), np.array(self.altitudes)*1000.)
+        # gdlat, gdlon, gdalt = np.meshgrid(np.linspace(60., 85., 100), np.linspace(-180., 180., 100), np.array(self.altitudes)*1000.)
 
         # get original raw data from file
         with h5py.File(self.outputfilename, 'r') as f:
@@ -101,7 +102,7 @@ class Validate(object):
 
         for i, time in enumerate(raw_time):
 
-            dens = est_param(time,gdlat, gdlon, gdalt)
+            dens = est_param(time,gdlat, gdlon, gdalt, check_hull=False)
 
             for j, alt in enumerate(self.altitudes):
 
