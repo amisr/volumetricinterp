@@ -509,9 +509,9 @@ class Interpolate(object):
         from iri2016.base import IRI
         altstart = 100.
         altstop = 1000.
-        altstep = 5.
+        altstep = 25.
         iri_alt = np.arange(altstart, altstop+altstep, altstep)
-        iri_gdlat, iri_gdlon, iri_alt = np.meshgrid(np.arange(74., 83., 1.), np.arange(-110., -60., 5.), np.arange(altstart, altstop+altstep, altstep))
+        iri_gdlat, iri_gdlon, iri_alt = np.meshgrid(np.arange(70., 87., 5.), np.arange(-130., -40., 15.), np.arange(altstart, altstop+altstep, altstep))
 
 
         # loop over every record and calculate the coefficients
@@ -524,39 +524,41 @@ class Interpolate(object):
             for idx in np.ndindex(iri_alt.shape[:-1]):
                 iri[idx] = IRI(dt.datetime.utcfromtimestamp(np.mean(ut)), (altstart, altstop, altstep), iri_gdlat[idx+(0,)], iri_gdlon[idx+(0,)]).ne
 
-            import matplotlib.pyplot as plt
-            import cartopy.crs as ccrs
-            map_proj = ccrs.LambertConformal(central_latitude=74.7, central_longitude=-94.9)
-            fig = plt.figure()
-            ax = fig.add_subplot(111, projection=map_proj)
-            ax.coastlines()
-            ax.gridlines()
-            ax.scatter(lon, lat, c=ne0, vmin=0., vmax=3.e11, transform=ccrs.Geodetic())
-            ax.scatter(iri_gdlon[:,:,40], iri_gdlat[:,:,40], c=iri[:,:,40], vmin=0., vmax=3.e11, transform=ccrs.Geodetic())
-            plt.show()
+            # import matplotlib.pyplot as plt
+            # import cartopy.crs as ccrs
+            # map_proj = ccrs.LambertConformal(central_latitude=74.7, central_longitude=-94.9)
+            # fig = plt.figure()
+            # ax = fig.add_subplot(111, projection=map_proj)
+            # ax.coastlines()
+            # ax.gridlines()
+            # ax.scatter(lon, lat, c=ne0, vmin=0., vmax=3.e11, transform=ccrs.Geodetic())
+            # ax.scatter(iri_gdlon[:,:,8], iri_gdlat[:,:,8], c=iri[:,:,8], vmin=0., vmax=3.e11, transform=ccrs.Geodetic())
+            # plt.show()
 
 
 
 
-            # # remove any points with NaN values
-            # # Any NaN in the input value array will result in all fit coefficients being NaN
-            # lat0 = lat[np.isfinite(ne0)]
-            # lon0 = lon[np.isfinite(ne0)]
-            # alt0 = alt[np.isfinite(ne0)]
-            # er0 = er0[np.isfinite(ne0)]
-            # ne0 = ne0[np.isfinite(ne0)]
-            #
-            # lat0 = np.concatenate((lat0,iri_gdlat.flatten()))
-            # lon0 = np.concatenate((lon0,iri_gdlon.flatten()))
-            # alt0 = np.concatenate((alt0,iri_alt.flatten()))
-            # er0 = np.concatenate((er0,np.full(iri.shape, 1.e11).flatten()))
-            # ne0 = np.concatenate((ne0,iri.flatten()))
+            # remove any points with NaN values
+            # Any NaN in the input value array will result in all fit coefficients being NaN
+            lat0 = lat[np.isfinite(ne0)]
+            lon0 = lon[np.isfinite(ne0)]
+            alt0 = alt[np.isfinite(ne0)]/1000.
+            er0 = er0[np.isfinite(ne0)]
+            ne0 = ne0[np.isfinite(ne0)]
 
-            lat0 = iri_gdlat.flatten()
-            lon0 = iri_gdlon.flatten()
-            alt0 = iri_alt.flatten()
-            er0 = np.full(iri.shape, 1.e10).flatten()
-            ne0 = iri.flatten()
+            print(lat0.size, iri_gdlat.size)
+
+            lat0 = np.concatenate((lat0,iri_gdlat.flatten()))
+            lon0 = np.concatenate((lon0,iri_gdlon.flatten()))
+            alt0 = np.concatenate((alt0,iri_alt.flatten()))
+            er0 = np.concatenate((er0,np.full(iri.shape, 1.e11).flatten()))
+            ne0 = np.concatenate((ne0,iri.flatten()))
+
+            # lat0 = iri_gdlat.flatten()
+            # lon0 = iri_gdlon.flatten()
+            # alt0 = iri_alt.flatten()
+            # er0 = np.full(iri.shape, 1.e10).flatten()
+            # ne0 = iri.flatten()
 
 
             # define matricies
