@@ -170,48 +170,18 @@ class Interpolate(object):
         """
 
         # Set nu
-        scale_factors = [0.6,0.7,0.8,0.9,1.0]
-#         scale_factors = [1.0]
-        N = len(b)
-#         N = A.shape[0]-A.shape[1]
-#         print(N,A.shape)
-        bracket = False
+        # nu = A.shape[0]-A.shape[1]
+        nu = A.shape[0]
+        # nu = 0.
 
-        for sf in scale_factors:
-            nu = N*sf
-            # nu = N*1.
+        # alpha = np.arange(-100.,0.,0.1)
+        # val = [self.chi2objfunct(a,A,b,W,reg_matrices,nu,reg) for a in alpha]
+        # import matplotlib.pyplot as plt
+        # plt.plot(alpha,val)
+        # plt.show()
 
-            # Determine the bracketing interval for the root (between 1e0 and 1e-100)
-            alpha0 = 0.
-            val0 = 1.
-            alpha = 0.
-            val = self.chi2objfunct(alpha,A,b,W,reg_matrices,nu,reg)
-            if val<0:
-                print('Too smooth to find regularization parameter. Returning alpha=0.')
-                return 0
-
-            while val0*val > 0:
-                # print val0, val
-                bracket = True
-                # nu = N*scale_factor
-                val0 = val
-                alpha0 = alpha
-                alpha = alpha - 1.
-                val = self.chi2objfunct(alpha,A,b,W,reg_matrices,nu,reg)
-                if alpha < -100.:
-                    bracket = False
-                    break
-            if bracket:
-                break
-            else:
-                continue
-
-
-        if not bracket:
-            raise ValueError('Could not find any roots to the objective function chi^2-nu in the range (1e-100,1).')
-        else:
-            # Use the Brent (1973) method to find the root within the bracketing interval found above
-            solution = scipy.optimize.brentq(self.chi2objfunct,alpha,alpha0,args=(A,b,W,reg_matrices,nu,reg),disp=True)
+        # Use the Brent (1973) method to find the root within the bracketing interval found above
+        solution = scipy.optimize.brentq(self.chi2objfunct,-100.,0.,args=(A,b,W,reg_matrices,nu,reg),disp=True)
 
         reg_param = np.power(10.,solution)
 
@@ -257,6 +227,7 @@ class Interpolate(object):
         # Caluclate chi2
         val = np.einsum('ji,i->j',A,C)
         chi2 = sum((val-b)**2*W)
+        # print(chi2,nu)
 
         return chi2-nu
 
@@ -284,15 +255,22 @@ class Interpolate(object):
                 guess later, possibly having different initial guesses for density and temperature.
         """
 
-        # Set initial guess
-        alpha0 = -20.
+        alpha = np.arange(-40.,-20.,0.1)
+        val = [self.gcvobjfunct(a,A,b,W,reg_matrices,reg) for a in alpha]
+        import matplotlib.pyplot as plt
+        plt.plot(alpha,val)
+        plt.show()
 
-        # Use the Nelder-Mead method to find the minimum of the GCV objective function
-        solution = scipy.optimize.minimize(self.gcvobjfunct,alpha0,args=(A,b,W,reg_matrices,reg),method='Nelder-Mead')
-        if not solution.success:
-            raise ValueError('Minima of GCV function could not be found')
-
-        reg_param = np.power(10.,solution.x[0])
+        # # Set initial guess
+        # alpha0 = -20.
+        #
+        # # Use the Nelder-Mead method to find the minimum of the GCV objective function
+        # solution = scipy.optimize.minimize(self.gcvobjfunct,alpha0,args=(A,b,W,reg_matrices,reg),method='Nelder-Mead')
+        # if not solution.success:
+        #     raise ValueError('Minima of GCV function could not be found')
+        #
+        # reg_param = np.power(10.,solution.x[0])
+        reg_param = 0.
 
         return reg_param
 
@@ -330,25 +308,40 @@ class Interpolate(object):
                 reg_params[rl] = 0.
 
         residuals = []
-        for i in range(len(b0)):
-            # Pull one data point out of arrays
-            # data point in question:
-            Ai = A0[i,:]
-            bi = b0[i]
-            Wi = W0[i]
-            # arrays minus one data point:
-            A = np.delete(A0,i,0)
-            b = np.delete(b0,i,0)
-            W = np.delete(W0,i,0)
+        for i in range(10):
+            ri = np.random.randint(len(b0), size=int(0.1*len(b0)))
+            A = np.delete(A0,ri,0)
+            b = np.delete(b0,ri,0)
+            W = np.delete(W0,ri,0)
 
             # Evaluate coefficient vector
             C = self.eval_C(A,b,W,reg_matrices,reg_params)
 
-            # Calculate residual for the data point not included in the fit
-            val = np.squeeze(np.dot(Ai,C))
-            residuals.append((val-bi)**2*Wi)
+            # Caluclate chi2
+            val = np.einsum('ji,i->j',A0,C)
+            residuals.append(sum((val-b0)**2*W0))
 
-        return sum(residuals)
+
+        # for i in range(len(b0)):
+        #     print(alpha,i,'/',len(b0))
+        #     # Pull one data point out of arrays
+        #     # data point in question:
+        #     Ai = A0[i,:]
+        #     bi = b0[i]
+        #     Wi = W0[i]
+        #     # arrays minus one data point:
+        #     A = np.delete(A0,i,0)
+        #     b = np.delete(b0,i,0)
+        #     W = np.delete(W0,i,0)
+        #
+        #     # Evaluate coefficient vector
+        #     C = self.eval_C(A,b,W,reg_matrices,reg_params)
+        #
+        #     # Calculate residual for the data point not included in the fit
+        #     val = np.squeeze(np.dot(Ai,C))
+        #     residuals.append((val-bi)**2*Wi)
+
+        return np.mean(residuals)
 
     def manual(self,A,b,W,Omega,Psi,Tau,reg):
         """
@@ -553,6 +546,8 @@ class Interpolate(object):
 
             # calculate regularization parameters
             reg_params = self.find_reg_param(A,b,W,reg_matricies,method=self.reg_method)
+            print(reg_params)
+            # reg_params = {'curvature':0.0}
 
             # if regularization parameters are NaN, skip this record - fit can not be computed
             if np.any(np.isnan([v for v in reg_params.values()])):
@@ -567,6 +562,7 @@ class Interpolate(object):
 
             # calculate chi2
             c2 = sum((np.squeeze(np.dot(A,C))-np.squeeze(b))**2*np.squeeze(W))
+            print(c2)
 
             # append lists
             Coeffs.append(C)

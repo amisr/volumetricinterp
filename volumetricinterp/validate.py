@@ -75,7 +75,7 @@ class Validate(object):
         hull_lat, hull_lon, hull_alt = pm.ecef2geodetic(est_param.hull_vert[:,0], est_param.hull_vert[:,1], est_param.hull_vert[:,2])
 
         # set input coordinates
-        gdlat, gdlon, gdalt = np.meshgrid(np.linspace(np.nanmin(hull_lat), np.nanmax(hull_lat), 100), np.linspace(np.nanmin(hull_lon), np.nanmax(hull_lon), 100), np.array(self.altitudes)*1000.)
+        gdlat, gdlon, gdalt = np.meshgrid(np.linspace(np.nanmin(hull_lat), np.nanmax(hull_lat), 30), np.linspace(np.nanmin(hull_lon), np.nanmax(hull_lon), 30), np.array(self.altitudes)*1000.)
 
         # get original raw data from file
         with h5py.File(self.outputfilename, 'r') as f:
