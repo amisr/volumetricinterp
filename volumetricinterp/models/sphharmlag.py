@@ -253,7 +253,7 @@ class Model(object):
             return -m*(m-1)*sp.lpmv(m,v,np.cos(t)) + 2*(m-1)*(v+m)*(v+m-1)*np.cos(t)/np.sin(t)*sp.lpmv(m-1,v,np.cos(t)) + (v+m)*(v+m-1)**2*(v+m-2)*sp.lpmv(m-2,v,np.cos(t))
 
         def Z(k,z):
-            return 1/(2*RE*z)*((4*RE*z*k-2*RE*z**2-k+z/2-2*k/z+2*k**2/z)*sp.eval_laguerre(k,z) + (-4*RE*z*k+4*k/z-4*k**2/z+k)*sp.eval_laguerre(k-1,z) + 2*k*(k-1)/z*sp.eval_laguerre(k-2,z))
+            return 100./(2*RE*z)*((4*k*RE*(z/100.+1)-2*RE*(z/100.+1)*z-k+z/2-2*k/z+2*k**2/z)*sp.eval_laguerre(k,z) + (-4*k*RE*(z/100.+1)+4*k/z-4*k**2/z+k)*sp.eval_laguerre(k-1,z) + 2*k*(k-1)/z*sp.eval_laguerre(k-2,z))
 
         ki, li, mi = self.basis_numbers(ni)
         kj, lj, mj = self.basis_numbers(nj)
@@ -262,13 +262,13 @@ class Model(object):
 
         I1 = scipy.integrate.quad(lambda p: self.Az(vi,mi,p)*self.Az(vj,mj,p), 0., 2*np.pi)
         I2 = scipy.integrate.quad(lambda t: P(vi,mi,t)*P(vj,mj,t)*np.sin(t), 0., self.cap_lim)
-        I3 = scipy.integrate.quad(lambda z: Z(ki,z)*Z(kj,z)*np.exp(-z)/(RE*z**2), 1., np.inf)
+        I3 = scipy.integrate.quad(lambda z: Z(ki,z)*Z(kj,z)*np.exp(-z)/(100.*RE*(z/100.+1)**2), 1., np.inf)
         I4 = scipy.integrate.quad(lambda t: P(vi,mi,t)*T(vj,mj,t)*np.sin(t), 0., self.cap_lim)
-        I5 = scipy.integrate.quad(lambda z: Z(ki,z)*L(kj,z)*np.exp(-z)/(RE*z**2), 1., np.inf)
+        I5 = scipy.integrate.quad(lambda z: Z(ki,z)*L(kj,z)*np.exp(-z)/(100.*RE*(z/100.+1)**2), 1., np.inf)
         I6 = scipy.integrate.quad(lambda t: T(vi,mi,t)*P(vj,mj,t)*np.sin(t), 0., self.cap_lim)
-        I7 = scipy.integrate.quad(lambda z: L(ki,z)*Z(kj,z)*np.exp(-z)/(RE*z**2), 1., np.inf)
+        I7 = scipy.integrate.quad(lambda z: L(ki,z)*Z(kj,z)*np.exp(-z)/(100.*RE*(z/100.+1)**2), 1., np.inf)
         I8 = scipy.integrate.quad(lambda t: T(vi,mi,t)*T(vj,mj,t)*np.sin(t), 0., self.cap_lim)
-        I9 = scipy.integrate.quad(lambda z: L(ki,z)*L(kj,z)*np.exp(-z)/(RE*z**2), 1., np.inf)
+        I9 = scipy.integrate.quad(lambda z: L(ki,z)*L(kj,z)*np.exp(-z)/(100.*RE*(z/100.+1)**2), 1., np.inf)
 
         return I1[0]*(I2[0]*I3[0]+I4[0]*I5[0]+I6[0]*I7[0]+I8[0]*I9[0])
 
@@ -417,8 +417,8 @@ class Model(object):
         t = np.arccos(Pr[2]/r)
         p = np.arctan2(Pr[1],Pr[0])
 
-        # return 100*(r/RE-1), t, p
-        return r/RE, t, p
+        return 100*(r/RE-1), t, p
+        # return r/RE, t, p
 
 
 
