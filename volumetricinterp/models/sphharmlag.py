@@ -134,11 +134,36 @@ class Model(object):
 
         z, theta, phi = self.transform_coord(gdlat.flatten(), gdlon.flatten(), gdalt.flatten())
 
+        # print(min(gdalt), max(gdalt), min(z), max(z))
+
+        # import matplotlib.pyplot as plt
+        # fig = plt.figure()
+        # ax = fig.add_subplot(111, projection='polar')
+        # ax.scatter(phi, np.sin(theta))
+        # ax.plot(np.linspace(0.,2*np.pi,100), np.full(100, np.sin(self.cap_lim)))
+        # plt.show()
+
+        phi0, theta0 = np.meshgrid(np.linspace(0., 2*np.pi, 100), np.linspace(0., 1.1*self.cap_lim, 50.))
+        z0 = np.linspace(0., 100., 100)
+
         A = []
         for n in range(self.nbasis):
             k, l, m = self.basis_numbers(n)
             v = self.nu(n)
             A.append(np.exp(-0.5*z)*sp.eval_laguerre(k,z)*self.Az(v,m,phi)*sp.lpmv(m,v,np.cos(theta)))
+
+            # fig = plt.figure()
+            # ax = fig.add_subplot(121, projection='polar')
+            # c = ax.pcolormesh(phi0, np.sin(theta0), self.Az(v,m,phi0)*sp.lpmv(m,v,np.cos(theta0)), cmap='bwr')
+            # ax.scatter(phi, np.sin(theta), s=1)
+            # ax.plot(np.linspace(0.,2*np.pi,100), np.full(100, np.sin(self.cap_lim)))
+            # ax.set_title('k = {}, l = {}, m = {}, v = {}'.format(k, l, m, v))
+            # fig.colorbar(c)
+            # ax = fig.add_subplot(122)
+            # ax.plot(np.exp(-0.5*z0)*sp.eval_laguerre(k,z0), z0)
+            # ax.scatter(np.exp(-0.5*z)*sp.eval_laguerre(k,z), z, s=1)
+            # plt.show()
+
         nax = list(np.arange(gdlat.ndim)+1)
         nax.append(0)
         A0 = np.transpose(np.array(A).reshape((-1,)+gdlat.shape), axes=nax)
@@ -377,19 +402,20 @@ class Model(object):
 
         """
 
-        x0, y0, z0 = pm.geodetic2ecef(self.latcp,self.loncp,0.)
-        theta0 = np.arccos(z0/np.sqrt(x0**2+y0**2+z0**2))
-        phi0 = np.arctan2(y0,x0)
+        x, y, z = pm.geodetic2ecef(gdlat, gdlon, gdalt*1000.)
+        P = np.array([x, y, z])
 
-        k = np.array([np.cos(phi0+np.pi/2.),np.sin(phi0+np.pi/2.),0.])
+        t0 = -(90.-self.latcp)*np.pi/180.
+        p0 = self.loncp*np.pi/180.
 
-        x, y, z = pm.geodetic2ecef(gdlat, gdlon, gdalt)
-        Rp = np.array([x,y,z])
-        Rr = np.array([R*np.cos(theta0)+np.cross(k,R)*np.sin(theta0)+k*np.dot(k,R)*(1-np.cos(theta0)) for R in Rp.T]).T
+        Rz = np.array([[np.cos(p0),np.sin(p0),0.],[-np.sin(p0),np.cos(p0),0.],[0.,0.,1.]])
+        Ry = np.array([[np.cos(t0),0.,np.sin(t0)],[0.,1.,0.],[-np.sin(t0),0.,np.cos(t0)]])
 
-        r = np.sqrt(Rr[0]**2+Rr[1]**2+Rr[2]**2)
-        t = np.arccos(Rr[2]/r)
-        p = np.arctan2(Rr[1],Rr[0])
+        Pr = np.einsum('ij,jk,k...->i...', Ry, Rz, P)
+
+        r = np.sqrt(Pr[0]**2+Pr[1]**2+Pr[2]**2)
+        t = np.arccos(Pr[2]/r)
+        p = np.arctan2(Pr[1],Pr[0])
 
         # return 100*(r/RE-1), t, p
         return r/RE, t, p
