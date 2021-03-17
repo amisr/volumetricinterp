@@ -8,6 +8,8 @@ import io
 import configparser
 import importlib
 import pymap3d as pm
+import keras as k
+from keras.models import load_model
 
 
 class Estimate(object):
@@ -30,7 +32,7 @@ class Estimate(object):
         get_C: return correct C array given time
     """
 
-    def __init__(self,coeff_filename,timetol=60.,timeinterp=False):
+    def __init__(self, coeff_filename, timetol=60., timeinterp=False):
 
         self.timetol = timetol
         self.timeinterp = timeinterp
@@ -46,11 +48,10 @@ class Estimate(object):
         config_file.seek(0)
 
         # m = importlib.import_module('models.'+self.model_name)
-        m = importlib.import_module('.models.'+self.model_name, package='volumetricinterp')
+        m = importlib.import_module('.models.' + self.model_name, package='volumetricinterp')
         self.model = m.Model(config_file)
 
-
-    def loadh5(self,filename=None):
+    def loadh5(self, filename=None):
         """
         Loads coefficients from a saved hdf5 file based on the date, radar, and param attributes
 
@@ -62,17 +63,11 @@ class Estimate(object):
         with tables.open_file(filename, 'r') as h5file:
             self.Coeffs = h5file.get_node('/Coeffs/C')[:]
             self.Covariance = h5file.get_node('/Coeffs/dC')[:]
-
             self.time = h5file.get_node('/UnixTime')[:]
-
             self.hull_vert = h5file.get_node('/FitParams/hull_vert')[:]
-
             self.config_file_text = h5file.get_node('/ConfigFile/Contents').read()
 
-
-
-
-    def __call__(self,time,gdlat,gdlon,gdalt,calcgrad=False,calcerr=False,check_hull=True):
+    def __call__(self, time, gdlat, gdlon, gdalt, calcgrad=False, calcerr=False, check_hull=True):
         """
         Fully calculates parameters and their gradients given input coordinates and a time.
         This is the main function that is used to retrieve reconstructed parameters.
@@ -106,19 +101,27 @@ class Estimate(object):
                 if calcgrad=False, dP is an array of NAN
         """
 
-
         C, dC = self.get_C(time)
 
         # use einsum to retain shape of input arrays correctly
         A = self.model.basis(gdlat, gdlon, gdalt)
         # print(A.shape, C.shape)
-        parameter = np.einsum('...i,i->...',A,C)
+        #parameter = np.einsum('...i,i->...', A, C)
+
+        # Network estimation.
+        network = k.Sequential([k.layers.Dense(units=1, input_shape=[A.shape[3]])])
+        network.load_weights('nn_weights.h5')
+        X_nn = np.reshape(A, (A.shape[0] * A.shape[1] * A.shape[2], A.shape[3]))
+        y_nn = network.predict(X_nn)
+        y_nn = np.reshape(np.array(y_nn), (A.shape[0], A.shape[1], A.shape[2]))
+        parameter = y_nn
+
         # print(parameter.shape)
         # parameter = np.reshape(np.dot(A,C),np.shape(A)[0])
 
         if check_hull:
             check = self.check_hull(gdlat, gdlon, gdalt)
-            parameter[~check]=np.nan
+            parameter[~check] = np.nan
 
         return parameter
 
@@ -146,11 +149,7 @@ class Estimate(object):
         # else:
         #     return P.reshape(tuple(list(Rshape)[1:]))
 
-
-
-
-
-    def check_hull(self,lat0,lon0,alt0):
+    def check_hull(self, lat0, lon0, alt0):
         """
         Check if the input points R0 are within the convex hull of the original data.
 
@@ -169,10 +168,10 @@ class Estimate(object):
         for lat, lon, alt in zip(lat0.ravel(), lon0.ravel(), alt0.ravel()):
             value = False
 
-            x, y, z = pm.geodetic2ecef(lat,lon,alt)
-            pnts = np.append(self.hull_vert, np.array([[x,y,z]]), axis=0)
+            x, y, z = pm.geodetic2ecef(lat, lon, alt)
+            pnts = np.append(self.hull_vert, np.array([[x, y, z]]), axis=0)
             new_hull = ConvexHull(pnts)
-            if np.array_equal(hull.vertices,new_hull.vertices):
+            if np.array_equal(hull.vertices, new_hull.vertices):
                 value = True
             check.append(value)
         return np.array(check).reshape(alt0.shape)
@@ -193,7 +192,7 @@ class Estimate(object):
         """
 
         # find unix time of requested point
-        t0 = (t-dt.datetime.utcfromtimestamp(0)).total_seconds()
+        t0 = (t - dt.datetime.utcfromtimestamp(0)).total_seconds()
 
         # find time of mid-points
         mt = np.mean(self.time, axis=1)
@@ -201,16 +200,16 @@ class Estimate(object):
         try:
             if self.timeinterp:
                 # find index of neighboring points
-                i = np.argwhere((t0>=mt[:-1]) & (t0<mt[1:])).flatten()[0]
+                i = np.argwhere((t0 >= mt[:-1]) & (t0 < mt[1:])).flatten()[0]
                 # calculate T
-                T = (t0-mt[i])/(mt[i+1]-mt[i])
+                T = (t0 - mt[i]) / (mt[i + 1] - mt[i])
                 # calculate interpolated values
-                C = (1-T)*self.Coeffs[i,:] + T*self.Coeffs[i+1,:]
-                dC = (1-T)*self.Covariance[i,:,:] + T*self.Covariance[i+1,:,:]
+                C = (1 - T) * self.Coeffs[i, :] + T * self.Coeffs[i + 1, :]
+                dC = (1 - T) * self.Covariance[i, :, :] + T * self.Covariance[i + 1, :, :]
 
             else:
-                i = np.argmin(np.abs(mt-t0))
-                if np.abs(mt[i]-t0)>self.timetol:
+                i = np.argmin(np.abs(mt - t0))
+                if np.abs(mt[i] - t0) > self.timetol:
                     raise IndexError
                 C = self.Coeffs[i]
                 dC = self.Covariance[i]
