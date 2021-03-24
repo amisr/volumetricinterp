@@ -499,12 +499,12 @@ class Interpolate(object):
             value = value[idx]
             error = error[idx]
 
-        # from iri2016.base import IRI
-        # altstart = 100.
-        # altstop = 800.
-        # altstep = 25.
+        from iri2016.base import IRI
+        altstart = 100.
+        altstop = 800.
+        altstep = 25.
         # iri_alt = np.arange(altstart, altstop+altstep, altstep)
-        # iri_gdlat, iri_gdlon, iri_alt = np.meshgrid(np.arange(70., 87., 5.), np.arange(-130., -40., 15.), np.arange(altstart, altstop+altstep, altstep))
+        iri_gdlat, iri_gdlon, iri_alt = np.meshgrid(np.arange(75., 82., 1.), np.arange(-100., -65., 5.), np.arange(altstart, altstop+altstep, altstep))
 
         # iri_x, iri_y, iri_z = pm.geodetic2ecef(iri_gdlat, iri_gdlon, iri_alt)
         # from scipy.spatial import Delaunay
@@ -517,13 +517,13 @@ class Interpolate(object):
         for ut, ne0, er0 in zip(utime, value, error):
             print(dt.datetime.utcfromtimestamp(np.mean(ut)))
 
+            iri = np.empty(iri_alt.shape)
+            for idx in np.ndindex(iri_alt.shape[:-1]):
+                out = IRI(dt.datetime.utcfromtimestamp(np.mean(ut)), (altstart, altstop, altstep), iri_gdlat[idx+(0,)], iri_gdlon[idx+(0,)])
+                iri[idx] = out.ne
 
-            # iri = np.empty(iri_alt.shape)
-            # for idx in np.ndindex(iri_alt.shape[:-1]):
-            #     iri[idx] = IRI(dt.datetime.utcfromtimestamp(np.mean(ut)), (altstart, altstop, altstep), iri_gdlat[idx+(0,)], iri_gdlon[idx+(0,)]).ne
-            #
-            # # iri[outside_points] = np.nan
-            #
+            # iri[outside_points] = np.nan
+
             # import matplotlib.pyplot as plt
             # import cartopy.crs as ccrs
             # map_proj = ccrs.LambertConformal(central_latitude=74.7, central_longitude=-94.9)
@@ -551,22 +551,22 @@ class Interpolate(object):
             ne0 = ne0[np.isfinite(ne0)]
             #
             # print(lat0.size, iri_gdlat.size)
-            # iri_gdlat = iri_gdlat[np.isfinite(iri)]
-            # iri_gdlon = iri_gdlon[np.isfinite(iri)]
-            # iri_alt = iri_alt[np.isfinite(iri)]
-            # iri = iri[np.isfinite(iri)]
+            iri_gdlat0 = iri_gdlat[np.isfinite(iri)]
+            iri_gdlon0 = iri_gdlon[np.isfinite(iri)]
+            iri_alt0 = iri_alt[np.isfinite(iri)]
+            iri0 = iri[np.isfinite(iri)]
 
-            # lat0 = np.concatenate((lat0,iri_gdlat.flatten()))
-            # lon0 = np.concatenate((lon0,iri_gdlon.flatten()))
-            # alt0 = np.concatenate((alt0,iri_alt.flatten()))
-            # er0 = np.concatenate((er0,np.full(iri.shape, 1.e11).flatten()))
-            # ne0 = np.concatenate((ne0,iri.flatten()))
+            lat0 = np.concatenate((lat0,iri_gdlat.flatten()))
+            lon0 = np.concatenate((lon0,iri_gdlon.flatten()))
+            alt0 = np.concatenate((alt0,iri_alt.flatten()))
+            er0 = np.concatenate((er0,np.full(iri.shape, 1.e11).flatten()))
+            ne0 = np.concatenate((ne0,iri.flatten()))
 
-            # lat0 = iri_gdlat.flatten()
-            # lon0 = iri_gdlon.flatten()
-            # alt0 = iri_alt.flatten()
-            # er0 = np.full(iri.shape, 1.e10).flatten()
-            # ne0 = iri.flatten()
+            # lat0 = iri_gdlat0.flatten()
+            # lon0 = iri_gdlon0.flatten()
+            # alt0 = iri_alt0.flatten()
+            # er0 = np.full(iri0.shape, 1.e10).flatten()
+            # ne0 = iri0.flatten()
 
 
             # define matricies

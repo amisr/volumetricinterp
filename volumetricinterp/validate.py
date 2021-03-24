@@ -92,6 +92,14 @@ class Validate(object):
             raw_time = np.array([dt.datetime.utcfromtimestamp(t) for t in np.mean(utime, axis=1)[idx]])
             raw_dens = f['FittedParams/Ne'][idx,:,:]
 
+        # define IRI grid
+        from iri2016.base import IRI
+        altstart = 100.
+        altstop = 800.
+        altstep = 25.
+        # iri_alt = np.arange(altstart, altstop+altstep, altstep)
+        iri_gdlat, iri_gdlon, iri_alt = np.meshgrid(np.arange(75., 82., 1.), np.arange(-100., -65., 5.), np.arange(altstart, altstop+altstep, altstep))
+        print(iri_alt.shape)
 
         # setup figure
         fig = plt.figure(figsize=(len(self.altitudes)*2,len(raw_time)*2))
@@ -104,6 +112,11 @@ class Validate(object):
 
             dens = est_param(time,gdlat, gdlon, gdalt, check_hull=False)
 
+            iri = np.empty(iri_alt.shape)
+            for idx in np.ndindex(iri_alt.shape[:-1]):
+                out = IRI(time, (altstart, altstop, altstep), iri_gdlat[idx+(0,)], iri_gdlon[idx+(0,)])
+                iri[idx] = out.ne
+
             for j, alt in enumerate(self.altitudes):
 
                 # find index closeset to the projection altitude
@@ -111,6 +124,12 @@ class Validate(object):
                 rlat = raw_lat[tuple(np.arange(raw_alt.shape[0])),tuple(aidx)]
                 rlon = raw_lon[tuple(np.arange(raw_alt.shape[0])),tuple(aidx)]
                 rdens = raw_dens[i,tuple(np.arange(raw_alt.shape[0])),tuple(aidx)]
+
+                # find index closeset to the projection altitude
+                iriidx = np.nanargmin(np.abs(iri_alt[0,0,:]-alt)).flatten()[0]
+                irilat = iri_gdlat[:,:,iriidx]
+                irilon = iri_gdlon[:,:,iriidx]
+                iridens = iri[:,:,iriidx]
 
                 # create plot
                 ax = fig.add_subplot(gs[i,j], projection=map_proj)
@@ -121,6 +140,8 @@ class Validate(object):
                 c = ax.contourf(gdlon[:,:,j], gdlat[:,:,j], dens[:,:,j], np.linspace(self.colorlim[0],self.colorlim[1],31), extend='both', transform=ccrs.PlateCarree())
                 ax.scatter(rlon, rlat, c='white', s=20, transform=ccrs.Geodetic())
                 ax.scatter(rlon, rlat, c=rdens, s=10, vmin=self.colorlim[0], vmax=self.colorlim[1], transform=ccrs.Geodetic())
+                ax.scatter(irilon, irilat, c='white', s=20, transform=ccrs.Geodetic())
+                ax.scatter(irilon, irilat, c=iridens, s=10, vmin=self.colorlim[0], vmax=self.colorlim[1], transform=ccrs.Geodetic())
                 ax.set_title('{} km'.format(alt))
 
             # plot time labels and colorbars
