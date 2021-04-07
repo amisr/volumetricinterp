@@ -486,25 +486,22 @@ class Interpolate(object):
                 raise e
 
         # read data from AMISR fitted file
-        utime, lat, lon, alt, value, error = self.read_datafile(self.filename)
+        self.utime, self.lat, self.lon, self.alt, self.value, self.error = self.read_datafile(self.filename)
+        # print('RISR LOCATION', np.nanmean(self.lat), np.nanmean(self.lon))
 
         # compute hull that surrounds data
-        self.compute_hull(lat, lon, alt)
+        self.compute_hull(self.lat, self.lon, self.alt)
 
         # if a starttime and endtime are given, rewrite utime, value, and error arrays so
         #   they only contain records between those two times
         if starttime and endtime:
-            idx = np.argwhere((utime[:,0]>=(starttime-dt.datetime.utcfromtimestamp(0)).total_seconds()) & (utime[:,1]<=(endtime-dt.datetime.utcfromtimestamp(0)).total_seconds())).flatten()
-            utime = utime[idx,:]
-            value = value[idx]
-            error = error[idx]
+            idx = np.argwhere((self.utime[:,0]>=(starttime-dt.datetime.utcfromtimestamp(0)).total_seconds()) & (self.utime[:,1]<=(endtime-dt.datetime.utcfromtimestamp(0)).total_seconds())).flatten()
+            self.utime = self.utime[idx,:]
+            self.value = self.value[idx]
+            self.error = self.error[idx]
 
-        from iri2016.base import IRI
-        altstart = 100.
-        altstop = 800.
-        altstep = 25.
-        # iri_alt = np.arange(altstart, altstop+altstep, altstep)
-        iri_gdlat, iri_gdlon, iri_alt = np.meshgrid(np.arange(75., 82., 1.), np.arange(-100., -65., 5.), np.arange(altstart, altstop+altstep, altstep))
+
+        self.iri_lat, self.iri_lon, self.iri_alt, self.iri_dens, self.iri_error = self.get_iri(self.utime)
 
         # iri_x, iri_y, iri_z = pm.geodetic2ecef(iri_gdlat, iri_gdlon, iri_alt)
         # from scipy.spatial import Delaunay
@@ -514,13 +511,9 @@ class Interpolate(object):
 
         # loop over every record and calculate the coefficients
         # if modeling time variation, this loop will change?
-        for ut, ne0, er0 in zip(utime, value, error):
-            print(dt.datetime.utcfromtimestamp(np.mean(ut)))
-
-            iri = np.empty(iri_alt.shape)
-            for idx in np.ndindex(iri_alt.shape[:-1]):
-                out = IRI(dt.datetime.utcfromtimestamp(np.mean(ut)), (altstart, altstop, altstep), iri_gdlat[idx+(0,)], iri_gdlon[idx+(0,)])
-                iri[idx] = out.ne
+        # for ut, ne0, er0 in zip(utime, value, error):
+        for i in range(len(self.utime)):
+            print(dt.datetime.utcfromtimestamp(np.mean(self.utime[i])))
 
             # iri[outside_points] = np.nan
 
@@ -542,25 +535,32 @@ class Interpolate(object):
 
 
 
-            # remove any points with NaN values
-            # Any NaN in the input value array will result in all fit coefficients being NaN
-            lat0 = lat[np.isfinite(ne0)]
-            lon0 = lon[np.isfinite(ne0)]
-            alt0 = alt[np.isfinite(ne0)]
+            # # remove any points with NaN values
+            # # Any NaN in the input value array will result in all fit coefficients being NaN
+            # lat0 = lat[np.isfinite(ne0)]
+            # lon0 = lon[np.isfinite(ne0)]
+            # alt0 = alt[np.isfinite(ne0)]
+            # er0 = er0[np.isfinite(ne0)]
+            # ne0 = ne0[np.isfinite(ne0)]
+            # #
+            # # print(lat0.size, iri_gdlat.size)
+            # iri_gdlat0 = iri_gdlat[np.isfinite(iri)]
+            # iri_gdlon0 = iri_gdlon[np.isfinite(iri)]
+            # iri_alt0 = iri_alt[np.isfinite(iri)]
+            # iri0 = iri[np.isfinite(iri)]
+
+            lat0 = np.concatenate((self.lat.flatten(),self.iri_lat.flatten()))
+            lon0 = np.concatenate((self.lon.flatten(),self.iri_lon.flatten()))
+            alt0 = np.concatenate((self.alt.flatten(),self.iri_alt.flatten()))
+            ne0 = np.concatenate((self.value[i].flatten(),self.iri_dens[i].flatten()))
+            er0 = np.concatenate((self.error[i].flatten(),self.iri_error[i].flatten()))
+
+            lat0 = lat0[np.isfinite(ne0)]
+            lon0 = lon0[np.isfinite(ne0)]
+            alt0 = alt0[np.isfinite(ne0)]
             er0 = er0[np.isfinite(ne0)]
             ne0 = ne0[np.isfinite(ne0)]
-            #
-            # print(lat0.size, iri_gdlat.size)
-            iri_gdlat0 = iri_gdlat[np.isfinite(iri)]
-            iri_gdlon0 = iri_gdlon[np.isfinite(iri)]
-            iri_alt0 = iri_alt[np.isfinite(iri)]
-            iri0 = iri[np.isfinite(iri)]
 
-            lat0 = np.concatenate((lat0,iri_gdlat.flatten()))
-            lon0 = np.concatenate((lon0,iri_gdlon.flatten()))
-            alt0 = np.concatenate((alt0,iri_alt.flatten()))
-            er0 = np.concatenate((er0,np.full(iri.shape, 1.e11).flatten()))
-            ne0 = np.concatenate((ne0,iri.flatten()))
 
             # lat0 = iri_gdlat0.flatten()
             # lon0 = iri_gdlon0.flatten()
@@ -626,7 +626,7 @@ class Interpolate(object):
             Covariance.append(dC)
             chi_sq.append(c2)
 
-        self.time = utime
+        self.time = self.utime
         self.Coeffs = np.array(Coeffs)
         self.Covariance = np.array(Covariance)
         self.chi_sq = np.array(chi_sq)
@@ -719,6 +719,25 @@ class Interpolate(object):
 
         return utime, latitude, longitude, altitude, value, error
 
+    def get_iri(self, utime):
+
+        from iri2016.base import IRI
+        altstart = 100.
+        altstop = 800.
+        altstep = 25.
+        # iri_alt = np.arange(altstart, altstop+altstep, altstep)
+        iri_gdlat, iri_gdlon, iri_alt = np.meshgrid(np.arange(75., 82., 1.5), np.arange(-100., -65., 7.), np.arange(altstart, altstop+altstep, altstep))
+
+        iri = np.empty((utime.shape[0],)+iri_alt.shape)
+
+        for t, ut in enumerate(utime):
+            for idx in np.ndindex(iri_alt.shape[:-1]):
+                out = IRI(dt.datetime.utcfromtimestamp(np.mean(ut)), (altstart, altstop, altstep), iri_gdlat[idx+(0,)], iri_gdlon[idx+(0,)])
+                iri[t,idx] = out.ne
+
+        iri_err = np.full(iri.shape, 1.e11)
+
+        return iri_gdlat, iri_gdlon, iri_alt, iri, iri_err
 
 
     def saveh5(self):
