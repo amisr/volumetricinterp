@@ -135,10 +135,10 @@ class Validate(object):
                 rdens = self.interp.value[i,aidx]
 
                 # find index closeset to the projection altitude
-                iriidx = np.nanargmin(np.abs(self.interp.iri_alt[0,0,:]-alt)).flatten()[0]
-                irilat = self.interp.iri_lat[:,:,iriidx]
-                irilon = self.interp.iri_lon[:,:,iriidx]
-                iridens = self.interp.iri_dens[i,:,:,iriidx]
+                iriidx = np.nanargmin(np.abs(self.interp.iri_alt[0,:]-alt)).flatten()[0]
+                irilat = self.interp.iri_lat[:,iriidx]
+                irilon = self.interp.iri_lon[:,iriidx]
+                iridens = self.interp.iri_dens[i,:,iriidx]
 
                 # create plot
                 ax = fig.add_subplot(gs[i,j], projection=map_proj)

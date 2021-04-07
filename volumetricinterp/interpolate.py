@@ -726,18 +726,29 @@ class Interpolate(object):
         altstop = 800.
         altstep = 25.
         # iri_alt = np.arange(altstart, altstop+altstep, altstep)
-        iri_gdlat, iri_gdlon, iri_alt = np.meshgrid(np.arange(75., 82., 1.5), np.arange(-100., -65., 7.), np.arange(altstart, altstop+altstep, altstep))
+        # iri_gdlat, iri_gdlon, iri_alt = np.meshgrid(np.arange(74., 83., 1.5), np.arange(-110., -55., 7.), np.arange(altstart, altstop+altstep, altstep))
+        iri_gdlat0, iri_gdlon0 = np.meshgrid(np.arange(74., 83., 1.), np.arange(-110., -55., 5.))
+        # iri_gdlat, iri_gdlon = np.meshgrid(np.array([74.,75.,82.,83.]), np.array([-110.,-105.,-60.,-55.]))
+        iri_gdlat = iri_gdlat0[(iri_gdlat0<76.) | (iri_gdlat0>80.) | (iri_gdlon0<-100.) | (iri_gdlon0>-70.)]
+        iri_gdlon = iri_gdlon0[(iri_gdlat0<76.) | (iri_gdlat0>80.) | (iri_gdlon0<-100.) | (iri_gdlon0>-70.)]
+        iri_gdlat = iri_gdlat.flatten()
+        iri_gdlon = iri_gdlon.flatten()
+        alt_array = np.arange(altstart, altstop+altstep, altstep)
+        iri_alt = np.tile(alt_array, (len(iri_gdlat),1))
 
         iri = np.empty((utime.shape[0],)+iri_alt.shape)
 
         for t, ut in enumerate(utime):
             for idx in np.ndindex(iri_alt.shape[:-1]):
-                out = IRI(dt.datetime.utcfromtimestamp(np.mean(ut)), (altstart, altstop, altstep), iri_gdlat[idx+(0,)], iri_gdlon[idx+(0,)])
+                out = IRI(dt.datetime.utcfromtimestamp(np.mean(ut)), (altstart, altstop, altstep), iri_gdlat[idx], iri_gdlon[idx])
                 iri[t,idx] = out.ne
 
         iri_err = np.full(iri.shape, 1.e11)
 
-        return iri_gdlat, iri_gdlon, iri_alt, iri, iri_err
+        iri_glat = np.tile(iri_gdlat, (len(alt_array),1)).T
+        iri_glon = np.tile(iri_gdlon, (len(alt_array),1)).T
+
+        return iri_glat, iri_glon, iri_alt, iri, iri_err
 
 
     def saveh5(self):
