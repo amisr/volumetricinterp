@@ -6,7 +6,7 @@ import configparser
 import scipy
 import scipy.integrate
 import scipy.special as sp
-from scipy.spatial import ConvexHull
+from scipy.spatial import ConvexHull, Delaunay
 import tables
 import importlib
 import os
@@ -412,10 +412,11 @@ class Interpolate(object):
                 geodetic altitude
         """
 
-        x, y, z = pm.geodetic2ecef(lat, lon, alt)
+        x, y, z = pm.geodetic2ecef(lat, lon, alt*1000.)
         R_cart = np.array([x,y,z]).T
 
         self.chull = ConvexHull(R_cart)
+        self.dhull = Delaunay(R_cart)
         self.hull_vert = R_cart[self.chull.vertices]
 
 
@@ -503,6 +504,8 @@ class Interpolate(object):
 
         self.iri_lat, self.iri_lon, self.iri_alt, self.iri_dens, self.iri_error = self.get_iri(self.utime)
 
+        # print(self.iri_dens.shape, np.argwhere(np.isnan(self.iri_dens)))
+
         # iri_x, iri_y, iri_z = pm.geodetic2ecef(iri_gdlat, iri_gdlon, iri_alt)
         # from scipy.spatial import Delaunay
         # hull = Delaunay(self.hull_vert)
@@ -524,11 +527,11 @@ class Interpolate(object):
             # ax = fig.add_subplot(121, projection=map_proj)
             # ax.coastlines()
             # ax.gridlines()
-            # ax.scatter(lon, lat, c=ne0, vmin=0., vmax=3.e11, transform=ccrs.Geodetic())
-            # ax.scatter(iri_gdlon[:,:,8], iri_gdlat[:,:,8], c=iri[:,:,8], vmin=0., vmax=3.e11, transform=ccrs.Geodetic())
+            # ax.scatter(self.lon, self.lat, c=self.value[i], vmin=0., vmax=3.e11, transform=ccrs.Geodetic())
+            # ax.scatter(self.iri_lon, self.iri_lat, c=self.iri_dens[i], vmin=0., vmax=3.e11, transform=ccrs.Geodetic())
             # ax = fig.add_subplot(122)
-            # ax.scatter(ne0, alt, c='blue', label='RISR')
-            # ax.scatter(iri, iri_alt, c='red', label='IRI')
+            # ax.scatter(self.value[i], self.alt, c='blue', label='RISR')
+            # ax.scatter(self.iri_dens[i], self.iri_alt, c='red', label='IRI')
             # ax.legend()
             # plt.show()
 
@@ -548,6 +551,8 @@ class Interpolate(object):
             # iri_gdlon0 = iri_gdlon[np.isfinite(iri)]
             # iri_alt0 = iri_alt[np.isfinite(iri)]
             # iri0 = iri[np.isfinite(iri)]
+
+            print(self.lat.shape, self.iri_lat.shape)
 
             lat0 = np.concatenate((self.lat.flatten(),self.iri_lat.flatten()))
             lon0 = np.concatenate((self.lon.flatten(),self.iri_lon.flatten()))
@@ -721,34 +726,59 @@ class Interpolate(object):
 
     def get_iri(self, utime):
 
+        # print('IRI')
+
         from iri2016.base import IRI
         altstart = 100.
         altstop = 800.
         altstep = 25.
         # iri_alt = np.arange(altstart, altstop+altstep, altstep)
-        # iri_gdlat, iri_gdlon, iri_alt = np.meshgrid(np.arange(74., 83., 1.5), np.arange(-110., -55., 7.), np.arange(altstart, altstop+altstep, altstep))
-        iri_gdlat0, iri_gdlon0 = np.meshgrid(np.arange(74., 83., 1.), np.arange(-110., -55., 5.))
+        iri_gdlat, iri_gdlon, iri_alt = np.meshgrid(np.arange(74., 83., 1.5), np.arange(-110., -55., 7.), np.arange(altstart, altstop+altstep, altstep))
+        # iri_gdlat0, iri_gdlon0 = np.meshgrid(np.arange(74., 83., 1.), np.arange(-110., -55., 5.))
         # iri_gdlat, iri_gdlon = np.meshgrid(np.array([74.,75.,82.,83.]), np.array([-110.,-105.,-60.,-55.]))
-        iri_gdlat = iri_gdlat0[(iri_gdlat0<76.) | (iri_gdlat0>80.) | (iri_gdlon0<-100.) | (iri_gdlon0>-70.)]
-        iri_gdlon = iri_gdlon0[(iri_gdlat0<76.) | (iri_gdlat0>80.) | (iri_gdlon0<-100.) | (iri_gdlon0>-70.)]
-        iri_gdlat = iri_gdlat.flatten()
-        iri_gdlon = iri_gdlon.flatten()
-        alt_array = np.arange(altstart, altstop+altstep, altstep)
-        iri_alt = np.tile(alt_array, (len(iri_gdlat),1))
+        # iri_gdlat = iri_gdlat0[(iri_gdlat0<76.) | (iri_gdlat0>80.) | (iri_gdlon0<-100.) | (iri_gdlon0>-70.)]
+        # iri_gdlon = iri_gdlon0[(iri_gdlat0<76.) | (iri_gdlat0>80.) | (iri_gdlon0<-100.) | (iri_gdlon0>-70.)]
+        # iri_gdlat = iri_gdlat.flatten()
+        # iri_gdlon = iri_gdlon.flatten()
+        # alt_array = np.arange(altstart, altstop+altstep, altstep)
+        # iri_alt = np.tile(alt_array, (len(iri_gdlat),1))
 
         iri = np.empty((utime.shape[0],)+iri_alt.shape)
 
         for t, ut in enumerate(utime):
             for idx in np.ndindex(iri_alt.shape[:-1]):
-                out = IRI(dt.datetime.utcfromtimestamp(np.mean(ut)), (altstart, altstop, altstep), iri_gdlat[idx], iri_gdlon[idx])
+                out = IRI(dt.datetime.utcfromtimestamp(np.mean(ut)), (altstart, altstop, altstep), iri_gdlat[idx+(0,)], iri_gdlon[idx+(0,)])
                 iri[t,idx] = out.ne
 
+        # set IRI errors
         iri_err = np.full(iri.shape, 1.e11)
+        iri_err[:,(iri_alt<200.) | (iri_alt>500.)] = 1.e10
 
-        iri_glat = np.tile(iri_gdlat, (len(alt_array),1)).T
-        iri_glon = np.tile(iri_gdlon, (len(alt_array),1)).T
+        iri_gdlat = iri_gdlat.flatten()
+        iri_gdlon = iri_gdlon.flatten()
+        iri_alt = iri_alt.flatten()
+        iri = iri.reshape(iri.shape[0], -1)
+        iri_err = iri_err.reshape(iri_err.shape[0], -1)
 
-        return iri_glat, iri_glon, iri_alt, iri, iri_err
+        # iri[(iri_gdlat0>76.) & (iri_gdlat0<80.) & (iri_gdlon0>-100.) & (iri_gdlon0<-70.) & ()]
+
+        # iri_glat = np.tile(iri_gdlat, (len(alt_array),1)).T
+        # iri_glon = np.tile(iri_gdlon, (len(alt_array),1)).T
+
+                # x, y, z = pm.geodetic2ecef(lat, lon, alt)
+                # R_cart = np.array([x,y,z]).T
+                #
+                # self.chull = ConvexHull(R_cart)
+                # self.hull_vert = R_cart[self.chull.vertices]
+
+        # remove points that lie within the AMISR FoV
+        x, y, z = pm.geodetic2ecef(iri_gdlat,iri_gdlon,iri_alt*1000.)
+        idx = np.argwhere(self.dhull.find_simplex(np.array([x,y,z]).T)>=0).flatten()
+        iri[:,idx] = np.nan
+        iri_err[:,idx] = np.nan
+
+
+        return iri_gdlat, iri_gdlon, iri_alt, iri, iri_err
 
 
     def saveh5(self):

@@ -115,6 +115,7 @@ class Validate(object):
         for i, time in enumerate(raw_time):
 
             dens = est_param(time,gdlat, gdlon, gdalt, check_hull=False)
+            dens[dens<0.] = np.nan
 
             # iri = np.empty(iri_alt.shape)
             # for idx in np.ndindex(iri_alt.shape[:-1]):
@@ -135,10 +136,14 @@ class Validate(object):
                 rdens = self.interp.value[i,aidx]
 
                 # find index closeset to the projection altitude
-                iriidx = np.nanargmin(np.abs(self.interp.iri_alt[0,:]-alt)).flatten()[0]
-                irilat = self.interp.iri_lat[:,iriidx]
-                irilon = self.interp.iri_lon[:,iriidx]
-                iridens = self.interp.iri_dens[i,:,iriidx]
+                # iriidx = np.nanargmin(np.abs(self.interp.iri_alt[0,:,:]-alt)).flatten()[0]
+                # irilat = self.interp.iri_lat[:,:,iriidx]
+                # irilon = self.interp.iri_lon[:,:,iriidx]
+                # iridens = self.interp.iri_dens[i,:,:,iriidx]
+                aidx = np.argwhere(np.abs(self.interp.iri_alt - alt)<10.).flatten()
+                irilat = self.interp.iri_lat[aidx]
+                irilon = self.interp.iri_lon[aidx]
+                iridens = self.interp.iri_dens[i,aidx]
 
                 # create plot
                 ax = fig.add_subplot(gs[i,j], projection=map_proj)
@@ -150,8 +155,11 @@ class Validate(object):
                 # print('RISR LOCATION', np.nanmean(rlat), np.nanmean(rlon))
                 # ax.scatter(rlon, rlat, c='white', s=20, transform=ccrs.Geodetic())
                 ax.scatter(rlon, rlat, c=rdens, s=10, vmin=self.colorlim[0], vmax=self.colorlim[1], transform=ccrs.Geodetic())
-                # ax.scatter(irilon, irilat, c='white', s=20, transform=ccrs.Geodetic())
+                # c=ax.scatter(rlon, rlat, c=rdens, s=10, vmin=0., vmax=1., transform=ccrs.Geodetic())
+                # ax.scatter(irilon[np.argwhere(np.isnan(iridens)).flatten()], irilat[np.argwhere(np.isnan(iridens)).flatten()], c='hotpink', s=20, transform=ccrs.Geodetic())
+                # ax.scatter(irilon, irilat, c=iridens, s=10, vmin=1.e13, vmax=2.e13, transform=ccrs.Geodetic())
                 ax.scatter(irilon, irilat, c=iridens, s=10, vmin=self.colorlim[0], vmax=self.colorlim[1], transform=ccrs.Geodetic())
+                # ax.scatter(irilon, irilat, c='pink', s=10, transform=ccrs.Geodetic())
                 ax.set_title('{} km'.format(alt))
 
             # plot time labels and colorbars
