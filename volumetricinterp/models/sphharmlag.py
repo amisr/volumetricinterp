@@ -134,11 +134,36 @@ class Model(object):
 
         z, theta, phi = self.transform_coord(gdlat.flatten(), gdlon.flatten(), gdalt.flatten())
 
+        # print(min(gdalt), max(gdalt), min(z), max(z))
+
+        # import matplotlib.pyplot as plt
+        # fig = plt.figure()
+        # ax = fig.add_subplot(111, projection='polar')
+        # ax.scatter(phi, np.sin(theta))
+        # ax.plot(np.linspace(0.,2*np.pi,100), np.full(100, np.sin(self.cap_lim)))
+        # plt.show()
+
+        phi0, theta0 = np.meshgrid(np.linspace(0., 2*np.pi, 100), np.linspace(0., 1.1*self.cap_lim, 50.))
+        z0 = np.linspace(0., 100., 100)
+
         A = []
         for n in range(self.nbasis):
             k, l, m = self.basis_numbers(n)
             v = self.nu(n)
             A.append(np.exp(-0.5*z)*sp.eval_laguerre(k,z)*self.Az(v,m,phi)*sp.lpmv(m,v,np.cos(theta)))
+
+            # fig = plt.figure()
+            # ax = fig.add_subplot(121, projection='polar')
+            # c = ax.pcolormesh(phi0, np.sin(theta0), self.Az(v,m,phi0)*sp.lpmv(m,v,np.cos(theta0)), cmap='bwr')
+            # ax.scatter(phi, np.sin(theta), s=1)
+            # ax.plot(np.linspace(0.,2*np.pi,100), np.full(100, np.sin(self.cap_lim)))
+            # ax.set_title('k = {}, l = {}, m = {}, v = {}'.format(k, l, m, v))
+            # fig.colorbar(c)
+            # ax = fig.add_subplot(122)
+            # ax.plot(np.exp(-0.5*z0)*sp.eval_laguerre(k,z0), z0)
+            # ax.scatter(np.exp(-0.5*z)*sp.eval_laguerre(k,z), z, s=1)
+            # plt.show()
+
         nax = list(np.arange(gdlat.ndim)+1)
         nax.append(0)
         A0 = np.transpose(np.array(A).reshape((-1,)+gdlat.shape), axes=nax)
@@ -195,22 +220,57 @@ class Model(object):
                 omega[nj,ni] = O
         return omega
 
-    def omega_ij(self,ni,nj):
+    # def omega_ij(self,ni,nj):
+    #     ki, li, mi = self.basis_numbers(ni)
+    #     kj, lj, mj = self.basis_numbers(nj)
+    #     vi = self.nu(ni)
+    #     vj = self.nu(nj)
+    #
+    #     z_int = lambda z: np.exp(-1*z)*sp.eval_laguerre(ki,z)*sp.eval_laguerre(kj,z)/z**2
+    #     t_int = lambda t: 1/np.sin(t)**3*(-1*vi*(vi*np.cos(t)**2+vi+1)*sp.lpmv(mi,vi,np.cos(t))+vi*(vi+mi)*np.cos(t)*sp.lpmv(mi,vi-1,np.cos(t))+vi*(vi-mi+1)*np.cos(t)*sp.lpmv(mi,vi+1,np.cos(t)))*(-1*vj*(vj*np.cos(t)**2+vj+1)*sp.lpmv(mj,vj,np.cos(t))+vj*(vj+mj)*np.cos(t)*sp.lpmv(mj,vj-1,np.cos(t))+vj*(vj-mj+1)*np.cos(t)*sp.lpmv(mj,vj+1,np.cos(t)))
+    #     p_int = lambda p: self.Az(vi,mi,p)*self.Az(vj,mj,p)
+    #
+    #     # import matplotlib.pyplot as plt
+    #     # parr = np.linspace(0.,2*np.pi,100)
+    #     # plt.plot(parr, p_int(parr))
+    #     # plt.show()
+    #
+    #     Iz = scipy.integrate.quad(z_int, 0., self.max_z_int)
+    #     It = scipy.integrate.quad(t_int, 0., self.cap_lim)
+    #     Ip = scipy.integrate.quad(p_int, 0., 2*np.pi)
+    #     O = Iz[0]*It[0]*Ip[0]
+    #     return O
+
+    def omega_ij(self, ni, nj):
+
+        def P(v,m,t):
+            return sp.lpmv(m,v,np.cos(t))
+
+        def L(k,z):
+            return(sp.eval_laguerre(k,z))
+
+        def T(v,m,t):
+            return -m*(m-1)*sp.lpmv(m,v,np.cos(t)) + 2*(m-1)*(v+m)*(v+m-1)*np.cos(t)/np.sin(t)*sp.lpmv(m-1,v,np.cos(t)) + (v+m)*(v+m-1)**2*(v+m-2)*sp.lpmv(m-2,v,np.cos(t))
+
+        def Z(k,z):
+            return 100./(2*RE*z)*((4*k*RE*(z/100.+1)-2*RE*(z/100.+1)*z-k+z/2-2*k/z+2*k**2/z)*sp.eval_laguerre(k,z) + (-4*k*RE*(z/100.+1)+4*k/z-4*k**2/z+k)*sp.eval_laguerre(k-1,z) + 2*k*(k-1)/z*sp.eval_laguerre(k-2,z))
+
         ki, li, mi = self.basis_numbers(ni)
         kj, lj, mj = self.basis_numbers(nj)
         vi = self.nu(ni)
         vj = self.nu(nj)
 
-        z_int = lambda z: np.exp(-1*z)*sp.eval_laguerre(ki,z)*sp.eval_laguerre(kj,z)/z**2
-        t_int = lambda t: 1/np.sin(t)**3*(-1*vi*(vi*np.cos(t)**2+vi+1)*sp.lpmv(mi,vi,np.cos(t))+vi*(vi+mi)*np.cos(t)*sp.lpmv(mi,vi-1,np.cos(t))+vi*(vi-mi+1)*np.cos(t)*sp.lpmv(mi,vi+1,np.cos(t)))*(-1*vj*(vj*np.cos(t)**2+vj+1)*sp.lpmv(mj,vj,np.cos(t))+vj*(vj+mj)*np.cos(t)*sp.lpmv(mj,vj-1,np.cos(t))+vj*(vj-mj+1)*np.cos(t)*sp.lpmv(mj,vj+1,np.cos(t)))
-        p_int = lambda p: self.Az(vi,mi,p)*self.Az(vj,mj,p)
+        I1 = scipy.integrate.quad(lambda p: self.Az(vi,mi,p)*self.Az(vj,mj,p), 0., 2*np.pi)
+        I2 = scipy.integrate.quad(lambda t: P(vi,mi,t)*P(vj,mj,t)*np.sin(t), 0., self.cap_lim)
+        I3 = scipy.integrate.quad(lambda z: Z(ki,z)*Z(kj,z)*np.exp(-z)/(100.*RE*(z/100.+1)**2), 1., np.inf)
+        I4 = scipy.integrate.quad(lambda t: P(vi,mi,t)*T(vj,mj,t)*np.sin(t), 0., self.cap_lim)
+        I5 = scipy.integrate.quad(lambda z: Z(ki,z)*L(kj,z)*np.exp(-z)/(100.*RE*(z/100.+1)**2), 1., np.inf)
+        I6 = scipy.integrate.quad(lambda t: T(vi,mi,t)*P(vj,mj,t)*np.sin(t), 0., self.cap_lim)
+        I7 = scipy.integrate.quad(lambda z: L(ki,z)*Z(kj,z)*np.exp(-z)/(100.*RE*(z/100.+1)**2), 1., np.inf)
+        I8 = scipy.integrate.quad(lambda t: T(vi,mi,t)*T(vj,mj,t)*np.sin(t), 0., self.cap_lim)
+        I9 = scipy.integrate.quad(lambda z: L(ki,z)*L(kj,z)*np.exp(-z)/(100.*RE*(z/100.+1)**2), 1., np.inf)
 
-        Iz = scipy.integrate.quad(z_int, 0., self.max_z_int)
-        It = scipy.integrate.quad(t_int, 0., self.cap_lim)
-        Ip = scipy.integrate.quad(p_int, 0., 2*np.pi)
-        O = Iz[0]*It[0]*Ip[0]
-        return O
-
+        return I1[0]*(I2[0]*I3[0]+I4[0]*I5[0]+I6[0]*I7[0]+I8[0]*I9[0])
 
     def eval_psi(self):
         psi = np.zeros((self.nbasis,self.nbasis))
@@ -342,21 +402,23 @@ class Model(object):
 
         """
 
-        x0, y0, z0 = pm.geodetic2ecef(self.latcp,self.loncp,0.)
-        theta0 = np.arccos(z0/np.sqrt(x0**2+y0**2+z0**2))
-        phi0 = np.arctan2(y0,x0)
+        x, y, z = pm.geodetic2ecef(gdlat, gdlon, gdalt*1000.)
+        P = np.array([x, y, z])
 
-        k = np.array([np.cos(phi0+np.pi/2.),np.sin(phi0+np.pi/2.),0.])
+        t0 = -(90.-self.latcp)*np.pi/180.
+        p0 = self.loncp*np.pi/180.
 
-        x, y, z = pm.geodetic2ecef(gdlat, gdlon, gdalt)
-        Rp = np.array([x,y,z])
-        Rr = np.array([R*np.cos(theta0)+np.cross(k,R)*np.sin(theta0)+k*np.dot(k,R)*(1-np.cos(theta0)) for R in Rp.T]).T
+        Rz = np.array([[np.cos(p0),np.sin(p0),0.],[-np.sin(p0),np.cos(p0),0.],[0.,0.,1.]])
+        Ry = np.array([[np.cos(t0),0.,np.sin(t0)],[0.,1.,0.],[-np.sin(t0),0.,np.cos(t0)]])
 
-        r = np.sqrt(Rr[0]**2+Rr[1]**2+Rr[2]**2)
-        t = np.arccos(Rr[2]/r)
-        p = np.arctan2(Rr[1],Rr[0])
+        Pr = np.einsum('ij,jk,k...->i...', Ry, Rz, P)
+
+        r = np.sqrt(Pr[0]**2+Pr[1]**2+Pr[2]**2)
+        t = np.arccos(Pr[2]/r)
+        p = np.arctan2(Pr[1],Pr[0])
 
         return 100*(r/RE-1), t, p
+        # return r/RE, t, p
 
 
 
