@@ -6,7 +6,7 @@ import configparser
 import scipy
 import scipy.integrate
 import scipy.special as sp
-from scipy.spatial import ConvexHull
+from scipy.spatial import ConvexHull, Delaunay
 import tables
 import importlib
 import os
@@ -84,6 +84,12 @@ class Interpolate(object):
         self.errlim = [float(i) for i in config.get('DEFAULT', 'ERRLIM').split(',')]
         self.chi2lim = [float(i) for i in config.get('DEFAULT', 'CHI2LIM').split(',')]
         self.goodfitcode = [int(i) for i in config.get('DEFAULT', 'GOODFITCODE').split(',')]
+
+        self.use_iri = config.getboolean('DEFAULT', 'USE_IRI')
+        self.iri_lat_grid = [float(i) for i in config.get('DEFAULT', 'IRI_LAT_GRID').split(',')]
+        self.iri_lon_grid = [float(i) for i in config.get('DEFAULT', 'IRI_LON_GRID').split(',')]
+        self.iri_alt_grid = [float(i) for i in config.get('DEFAULT', 'IRI_ALT_GRID').split(',')]
+        self.iri_err = config.getfloat('DEFAULT', 'IRI_ERR')
 
         self.model_name = config.get('MODEL', 'NAME')
 
@@ -412,10 +418,11 @@ class Interpolate(object):
                 geodetic altitude
         """
 
-        x, y, z = pm.geodetic2ecef(lat, lon, alt)
+        x, y, z = pm.geodetic2ecef(lat, lon, alt*1000.)
         R_cart = np.array([x,y,z]).T
 
         self.chull = ConvexHull(R_cart)
+        self.dhull = Delaunay(R_cart)
         self.hull_vert = R_cart[self.chull.vertices]
 
 
@@ -486,44 +493,41 @@ class Interpolate(object):
                 raise e
 
         # read data from AMISR fitted file
-        utime, lat, lon, alt, value, error = self.read_datafile(self.filename)
+        self.utime, self.lat, self.lon, self.alt, self.value, self.error = self.read_datafile(self.filename)
+        # print('RISR LOCATION', np.nanmean(self.lat), np.nanmean(self.lon))
 
         # compute hull that surrounds data
-        self.compute_hull(lat, lon, alt)
+        self.compute_hull(self.lat, self.lon, self.alt)
 
         # if a starttime and endtime are given, rewrite utime, value, and error arrays so
         #   they only contain records between those two times
         if starttime and endtime:
-            idx = np.argwhere((utime[:,0]>=(starttime-dt.datetime.utcfromtimestamp(0)).total_seconds()) & (utime[:,1]<=(endtime-dt.datetime.utcfromtimestamp(0)).total_seconds())).flatten()
-            utime = utime[idx,:]
-            value = value[idx]
-            error = error[idx]
+            idx = np.argwhere((self.utime[:,0]>=(starttime-dt.datetime.utcfromtimestamp(0)).total_seconds()) & (self.utime[:,1]<=(endtime-dt.datetime.utcfromtimestamp(0)).total_seconds())).flatten()
+            self.utime = self.utime[idx,:]
+            self.value = self.value[idx]
+            self.error = self.error[idx]
 
-        # from iri2016.base import IRI
-        # altstart = 100.
-        # altstop = 800.
-        # altstep = 25.
-        # iri_alt = np.arange(altstart, altstop+altstep, altstep)
-        # iri_gdlat, iri_gdlon, iri_alt = np.meshgrid(np.arange(70., 87., 5.), np.arange(-130., -40., 15.), np.arange(altstart, altstop+altstep, altstep))
+
+
+        # print(self.iri_dens.shape, np.argwhere(np.isnan(self.iri_dens)))
 
         # iri_x, iri_y, iri_z = pm.geodetic2ecef(iri_gdlat, iri_gdlon, iri_alt)
         # from scipy.spatial import Delaunay
         # hull = Delaunay(self.hull_vert)
         # outside_points = np.argwhere(hull.find_simplex(np.array([iri_x,iri_y,iri_z]).T)>=0)[0]
 
+        if self.use_iri:
+            self.iri_lat, self.iri_lon, self.iri_alt, self.iri_dens, self.iri_error = self.get_iri(self.utime)
+
 
         # loop over every record and calculate the coefficients
         # if modeling time variation, this loop will change?
-        for ut, ne0, er0 in zip(utime, value, error):
-            print(dt.datetime.utcfromtimestamp(np.mean(ut)))
+        # for ut, ne0, er0 in zip(utime, value, error):
+        for i in range(len(self.utime)):
+            print(dt.datetime.utcfromtimestamp(np.mean(self.utime[i])))
 
+            # iri[outside_points] = np.nan
 
-            # iri = np.empty(iri_alt.shape)
-            # for idx in np.ndindex(iri_alt.shape[:-1]):
-            #     iri[idx] = IRI(dt.datetime.utcfromtimestamp(np.mean(ut)), (altstart, altstop, altstep), iri_gdlat[idx+(0,)], iri_gdlon[idx+(0,)]).ne
-            #
-            # # iri[outside_points] = np.nan
-            #
             # import matplotlib.pyplot as plt
             # import cartopy.crs as ccrs
             # map_proj = ccrs.LambertConformal(central_latitude=74.7, central_longitude=-94.9)
@@ -531,42 +535,62 @@ class Interpolate(object):
             # ax = fig.add_subplot(121, projection=map_proj)
             # ax.coastlines()
             # ax.gridlines()
-            # ax.scatter(lon, lat, c=ne0, vmin=0., vmax=3.e11, transform=ccrs.Geodetic())
-            # ax.scatter(iri_gdlon[:,:,8], iri_gdlat[:,:,8], c=iri[:,:,8], vmin=0., vmax=3.e11, transform=ccrs.Geodetic())
+            # ax.scatter(self.lon, self.lat, c=self.value[i], vmin=0., vmax=3.e11, transform=ccrs.Geodetic())
+            # ax.scatter(self.iri_lon, self.iri_lat, c=self.iri_dens[i], vmin=0., vmax=3.e11, transform=ccrs.Geodetic())
             # ax = fig.add_subplot(122)
-            # ax.scatter(ne0, alt, c='blue', label='RISR')
-            # ax.scatter(iri, iri_alt, c='red', label='IRI')
+            # ax.scatter(self.value[i], self.alt, c='blue', label='RISR')
+            # ax.scatter(self.iri_dens[i], self.iri_alt, c='red', label='IRI')
             # ax.legend()
             # plt.show()
 
 
 
 
-            # remove any points with NaN values
-            # Any NaN in the input value array will result in all fit coefficients being NaN
-            lat0 = lat[np.isfinite(ne0)]
-            lon0 = lon[np.isfinite(ne0)]
-            alt0 = alt[np.isfinite(ne0)]
+            # # remove any points with NaN values
+            # # Any NaN in the input value array will result in all fit coefficients being NaN
+            # lat0 = lat[np.isfinite(ne0)]
+            # lon0 = lon[np.isfinite(ne0)]
+            # alt0 = alt[np.isfinite(ne0)]
+            # er0 = er0[np.isfinite(ne0)]
+            # ne0 = ne0[np.isfinite(ne0)]
+            # #
+            # # print(lat0.size, iri_gdlat.size)
+            # iri_gdlat0 = iri_gdlat[np.isfinite(iri)]
+            # iri_gdlon0 = iri_gdlon[np.isfinite(iri)]
+            # iri_alt0 = iri_alt[np.isfinite(iri)]
+            # iri0 = iri[np.isfinite(iri)]
+
+            # print(self.lat.shape, self.iri_lat.shape)
+
+            if self.use_iri:
+                lat0 = np.concatenate((self.lat.flatten(),self.iri_lat.flatten()))
+                lon0 = np.concatenate((self.lon.flatten(),self.iri_lon.flatten()))
+                alt0 = np.concatenate((self.alt.flatten(),self.iri_alt.flatten()))
+                ne0 = np.log10(np.concatenate((self.value[i].flatten(),self.iri_dens[i].flatten())))
+                er0 = np.log10(np.concatenate((self.error[i].flatten(),self.iri_error[i].flatten())))
+            else:
+                lat0 = self.lat.flatten()
+                lon0 = self.lon.flatten()
+                alt0 = self.alt.flatten()
+                ne0 = np.log10(self.value[i].flatten())
+                er0 = np.log10(self.error[i].flatten())
+
+            lat0 = lat0[np.isfinite(ne0)]
+            lon0 = lon0[np.isfinite(ne0)]
+            alt0 = alt0[np.isfinite(ne0)]
             er0 = er0[np.isfinite(ne0)]
             ne0 = ne0[np.isfinite(ne0)]
-            #
-            # print(lat0.size, iri_gdlat.size)
-            # iri_gdlat = iri_gdlat[np.isfinite(iri)]
-            # iri_gdlon = iri_gdlon[np.isfinite(iri)]
-            # iri_alt = iri_alt[np.isfinite(iri)]
-            # iri = iri[np.isfinite(iri)]
 
-            # lat0 = np.concatenate((lat0,iri_gdlat.flatten()))
-            # lon0 = np.concatenate((lon0,iri_gdlon.flatten()))
-            # alt0 = np.concatenate((alt0,iri_alt.flatten()))
-            # er0 = np.concatenate((er0,np.full(iri.shape, 1.e11).flatten()))
-            # ne0 = np.concatenate((ne0,iri.flatten()))
+            # import matplotlib.pyplot as plt
+            # plt.hist(np.log10(ne0), bins=100, range=(1,11.9))
+            # plt.show()
 
-            # lat0 = iri_gdlat.flatten()
-            # lon0 = iri_gdlon.flatten()
-            # alt0 = iri_alt.flatten()
-            # er0 = np.full(iri.shape, 1.e10).flatten()
-            # ne0 = iri.flatten()
+
+            # lat0 = iri_gdlat0.flatten()
+            # lon0 = iri_gdlon0.flatten()
+            # alt0 = iri_alt0.flatten()
+            # er0 = np.full(iri0.shape, 1.e10).flatten()
+            # ne0 = iri0.flatten()
 
 
             # define matricies
@@ -626,7 +650,7 @@ class Interpolate(object):
             Covariance.append(dC)
             chi_sq.append(c2)
 
-        self.time = utime
+        self.time = self.utime
         self.Coeffs = np.array(Coeffs)
         self.Covariance = np.array(Covariance)
         self.chi_sq = np.array(chi_sq)
@@ -702,7 +726,8 @@ class Interpolate(object):
         # Each column correpsonds to a different "check" condition
         # TRUE for "GOOD" point; FALSE for "BAD" point
         # A "good" record that shouldn't be removed should be TRUE for EVERY check condition
-        data_check = np.array([error>self.errlim[0], error<self.errlim[1], chi2>self.chi2lim[0], chi2<self.chi2lim[1], np.isin(fitcode,self.goodfitcode)])
+        # data_check = np.array([error>self.errlim[0], error<self.errlim[1], chi2>self.chi2lim[0], chi2<self.chi2lim[1], np.isin(fitcode,self.goodfitcode)])
+        data_check = np.array([chi2>self.chi2lim[0], chi2<self.chi2lim[1], np.isin(fitcode,self.goodfitcode)])
 
         # If ANY elements of data_check are FALSE, flag index as bad data
         bad_data = np.squeeze(np.any(data_check==False,axis=0,keepdims=True))
@@ -719,6 +744,65 @@ class Interpolate(object):
 
         return utime, latitude, longitude, altitude, value, error
 
+    def get_iri(self, utime):
+
+        from iri2016.base import IRI
+
+        # altstart = 75.
+        # altstop = 800.
+        # altstep = 25.
+        altstart = self.iri_alt_grid[0]
+        altstop = self.iri_alt_grid[1]
+        altstep = self.iri_alt_grid[2]
+        # iri_alt = np.arange(altstart, altstop+altstep, altstep)
+        iri_gdlat, iri_gdlon, iri_alt = np.meshgrid(np.arange(self.iri_lat_grid[0],self.iri_lat_grid[1],self.iri_lat_grid[2]), np.arange(self.iri_lon_grid[0],self.iri_lon_grid[1],self.iri_lon_grid[2]), np.arange(altstart, altstop+altstep, altstep))
+        # iri_gdlat0, iri_gdlon0 = np.meshgrid(np.arange(74., 83., 1.), np.arange(-110., -55., 5.))
+        # iri_gdlat, iri_gdlon = np.meshgrid(np.array([74.,75.,82.,83.]), np.array([-110.,-105.,-60.,-55.]))
+        # iri_gdlat = iri_gdlat0[(iri_gdlat0<76.) | (iri_gdlat0>80.) | (iri_gdlon0<-100.) | (iri_gdlon0>-70.)]
+        # iri_gdlon = iri_gdlon0[(iri_gdlat0<76.) | (iri_gdlat0>80.) | (iri_gdlon0<-100.) | (iri_gdlon0>-70.)]
+        # iri_gdlat = iri_gdlat.flatten()
+        # iri_gdlon = iri_gdlon.flatten()
+        # alt_array = np.arange(altstart, altstop+altstep, altstep)
+        # iri_alt = np.tile(alt_array, (len(iri_gdlat),1))
+
+        iri = np.empty((utime.shape[0],)+iri_alt.shape)
+
+        for t, ut in enumerate(utime):
+            for idx in np.ndindex(iri_alt.shape[:-1]):
+                out = IRI(dt.datetime.utcfromtimestamp(np.mean(ut)), (altstart, altstop, altstep), iri_gdlat[idx+(0,)], iri_gdlon[idx+(0,)])
+                iri[t,idx] = out.ne
+
+        # set IRI errors
+        # iri_err = iri.copy()*0.7
+        iri_err = np.full(iri.shape, self.iri_err)
+        # iri_err[:,(iri_alt<200.) | (iri_alt>500.)] = 1.e12
+
+        iri_gdlat = iri_gdlat.flatten()
+        iri_gdlon = iri_gdlon.flatten()
+        iri_alt = iri_alt.flatten()
+        iri = iri.reshape(iri.shape[0], -1)
+        iri_err = iri_err.reshape(iri_err.shape[0], -1)
+
+
+        # iri[(iri_gdlat0>76.) & (iri_gdlat0<80.) & (iri_gdlon0>-100.) & (iri_gdlon0<-70.) & ()]
+
+        # iri_glat = np.tile(iri_gdlat, (len(alt_array),1)).T
+        # iri_glon = np.tile(iri_gdlon, (len(alt_array),1)).T
+
+                # x, y, z = pm.geodetic2ecef(lat, lon, alt)
+                # R_cart = np.array([x,y,z]).T
+                #
+                # self.chull = ConvexHull(R_cart)
+                # self.hull_vert = R_cart[self.chull.vertices]
+
+        # remove points that lie within the AMISR FoV
+        x, y, z = pm.geodetic2ecef(iri_gdlat,iri_gdlon,iri_alt*1000.)
+        idx = np.argwhere(self.dhull.find_simplex(np.array([x,y,z]).T)>=0).flatten()
+        iri[:,idx] = np.nan
+        iri_err[:,idx] = np.nan
+
+
+        return iri_gdlat, iri_gdlon, iri_alt, iri, iri_err
 
 
     def saveh5(self):

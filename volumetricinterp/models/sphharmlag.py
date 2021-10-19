@@ -143,7 +143,7 @@ class Model(object):
         # ax.plot(np.linspace(0.,2*np.pi,100), np.full(100, np.sin(self.cap_lim)))
         # plt.show()
 
-        phi0, theta0 = np.meshgrid(np.linspace(0., 2*np.pi, 100), np.linspace(0., 1.1*self.cap_lim, 50.))
+        phi0, theta0 = np.meshgrid(np.linspace(0., 2*np.pi, 100), np.linspace(0., 1.1*self.cap_lim, 50))
         z0 = np.linspace(0., 100., 100)
 
         A = []
