@@ -35,6 +35,8 @@ def chapman_piecewise(z, A, Ht, Hb, z0):
 # read in datafile
 
 def interp_amisr(amisr_file, iso_time, coords):
+
+    # File read in - this can be shared with other parts of the code
     # amisr_file = '/Users/e30737/Desktop/Data/AMISR/RISR-N/2017/20171119.001_lp_1min-fitcal.h5'
     # amisr_file = '/Users/e30737/Desktop/Data/AMISR/RISR-N/2019/20190510.001_lp_5min-fitcal.h5'
     # amisr_file = '/Users/e30737/Desktop/Data/AMISR/synthetic/imaging_chapman.h5'
@@ -72,6 +74,7 @@ def interp_amisr(amisr_file, iso_time, coords):
     dens_err[bad_data] = np.nan
 
 
+    # Time specific - can extract and use multiple calls without reloading data
     targtime = np.datetime64('2017-11-21T19:20')
     print(targtime)
     tidx = np.argmin(np.abs(time-targtime))
@@ -83,7 +86,9 @@ def interp_amisr(amisr_file, iso_time, coords):
 
 
 
-    # Beam clustering
+    # Beam clustering - this will be the same throughout experiments
+    # Error propigation here??
+    # This adds covariance between beams
     # points = np.array([[0, 0], [0, 1.1], [1, 0], [1, 1]])
     # points = beamcode[:,1:3]
     r = np.cos(beamcode[:,2]*np.pi/180.)
@@ -122,7 +127,7 @@ def interp_amisr(amisr_file, iso_time, coords):
 
             # coeffs, _ = curve_fit(chapman, a[np.isfinite(d)], d[np.isfinite(d)], p0=[2.e11,0.5,150.*1000., 300.*1000.], bounds=[[0.,0.,0.,0.],[np.inf,np.inf,np.inf,np.inf]], absolute_sigma=True)
             # coeffs, _ = curve_fit(chapman_piecewise, a[np.isfinite(d)], d[np.isfinite(d)], sigma=dd[np.isfinite(d)], p0=[2.e11,50.*1000.,50.*1000., 300.*1000.], bounds=[[0.,0.,0.,0.],[np.inf,np.inf,np.inf,np.inf]], absolute_sigma=True)
-            coeffs, _ = curve_fit(chapman_piecewise, a[np.isfinite(d) & ~((a>400.*1000) & (dd<5.e10) & (d<5.e10))], d[np.isfinite(d) & ~((a>400.*1000) & (dd<5.e10) & (d<5.e10))], sigma=dd[np.isfinite(d) & ~((a>400.*1000) & (dd<5.e10) & (d<5.e10))], p0=[4.e11,100.*1000.,50.*1000., 300.*1000.], bounds=[[0.,0.,0.,0.],[np.inf,np.inf,np.inf,np.inf]], absolute_sigma=True)
+            coeffs, _ = curve_fit(chapman_piecewise, a[np.isfinite(d) & ~((a>400.*1000) & (dd<5.e10) & (d<5.e10))], d[np.isfinite(d) & ~((a>400.*1000) & (dd<5.e10) & (d<5.e10))], sigma=dd[np.isfinite(d) & ~((a>400.*1000) & (dd<5.e10) & (d<5.e10))], p0=[4.e11,100.*1000.,50.*1000., 300.*1000.], bounds=[[0.,0.,0.,0.],[np.inf,5.e6,np.inf,np.inf]], absolute_sigma=True)
             # print(coeffs)
         except RuntimeError:
             coeffs = [np.nan, np.nan, np.nan, np.nan]
@@ -168,6 +173,7 @@ def interp_amisr(amisr_file, iso_time, coords):
     print(chapman_coefficients.shape, clust_az.shape, clust_el.shape)
 
 
+    # Comment out
     # Polar plots to validate
     r = np.cos(clust_el*np.pi/180.)
     t = clust_az*np.pi/180.
@@ -205,7 +211,7 @@ def interp_amisr(amisr_file, iso_time, coords):
     # for i in range(len(r)):
     #     ax.annotate(str(i), (t[i], r[i]))
 
-    avg_coeffs = np.mean(chapman_coefficients, axis=0)
+    avg_coeffs = np.nanmean(chapman_coefficients, axis=0)
     print(avg_coeffs)
 
     ai = np.arange(100., 700., 1.)*1000.
@@ -217,7 +223,7 @@ def interp_amisr(amisr_file, iso_time, coords):
 
 
     # 2D RBF interpolation
-
+    # This transformation is wrong - effectively turns all beams vertical at 300 km
     d = chapman_coefficients[:,0].copy()
 
 
@@ -228,6 +234,7 @@ def interp_amisr(amisr_file, iso_time, coords):
 
 
     # Add edge points
+    # Do this more rigerously with boundary conditions?
     xc = np.mean(x)
     yc = np.mean(y)
     r = 400.0
@@ -251,7 +258,8 @@ def interp_amisr(amisr_file, iso_time, coords):
     # interp_NmF2 = interp_NmF2.reshape(newxgrid.shape)
 
 
-
+    # Replace with custom RBF interpolator?
+    # This might allow more efficiency/customization
     print(np.array([x,y]).shape, chapman_coefficients[:,0].shape)
     interp = RBFInterpolator(np.array([xp,yp]).T, dp)
     dflat = interp(np.array([newxgrid.flatten(), newygrid.flatten()]).T)
@@ -284,8 +292,8 @@ def interp_amisr(amisr_file, iso_time, coords):
 
 
 def main():
-    amisr_file = '/Users/e30737/Desktop/Data/AMISR/RISR-N/2017/20171119.001_lp_1min-fitcal.h5'
-    iso_time = '2017-11-21T19:20'
+    amisr_file = '/Users/e30737/Desktop/Data/AMISR/RISR-N/2016/20161127.002_lp_1min-fitcal.h5'
+    iso_time = '2016-11-27T22:55'
     coords = [np.linspace(-300.,500.,50), np.linspace(-200.,600.,50), np.linspace(100., 500., 30)]
     interp_amisr(amisr_file, iso_time, coords)
     # xgrid, ygrid = np.meshgrid()
