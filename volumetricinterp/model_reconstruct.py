@@ -75,7 +75,8 @@ def interp_amisr(amisr_file, iso_time, coords):
 
 
     # Time specific - can extract and use multiple calls without reloading data
-    targtime = np.datetime64('2017-11-21T19:20')
+    # targtime = np.datetime64('2017-11-21T19:20')
+    targtime = np.datetime64(iso_time)
     print(targtime)
     tidx = np.argmin(np.abs(time-targtime))
     # print(alt.shape, dens[tidx,:,:].shape)
