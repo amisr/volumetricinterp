@@ -82,7 +82,7 @@ def interp_amisr(amisr_file, iso_time, coords):
     # background_alt = alt.flatten()
     # background_dens = dens[tidx,:,:].flatten()
     # print(background_alt.shape, background_dens.shape)
-    print(tidx, time[tidx].astype('datetime64[s]'))
+    # print(tidx, time[tidx].astype('datetime64[s]'))
 
 
 
@@ -94,13 +94,13 @@ def interp_amisr(amisr_file, iso_time, coords):
     r = np.cos(beamcode[:,2]*np.pi/180.)
     t = beamcode[:,1]*np.pi/180.
     points = np.array([r*np.sin(t), r*np.cos(t)]).T
-    print(points.shape)
+    # print(points.shape)
 
     tri = Delaunay(points)
 
-    plt.triplot(points[:,0], points[:,1], tri.simplices)
-    plt.plot(points[:,0], points[:,1], 'o')
-    plt.show()
+    # plt.triplot(points[:,0], points[:,1], tri.simplices)
+    # plt.plot(points[:,0], points[:,1], 'o')
+    # plt.show()
 
     # ax = fig.add_subplot(111, projection='polar')
     # ax.triplot(points[:,0], points[:,1], tri.simplices)
@@ -170,56 +170,56 @@ def interp_amisr(amisr_file, iso_time, coords):
     chapman_coefficients = np.array(chapman_coefficients)
     clust_az = np.array(clust_az)
     clust_el = np.array(clust_el)
-    print(chapman_coefficients.shape, clust_az.shape, clust_el.shape)
+    # print(chapman_coefficients.shape, clust_az.shape, clust_el.shape)
 
 
-    # Comment out
-    # Polar plots to validate
-    r = np.cos(clust_el*np.pi/180.)
-    t = clust_az*np.pi/180.
-
-    fig = plt.figure(figsize=(12,12))
-    ax = fig.add_subplot(221, projection='polar')
-    ax.set_theta_zero_location('N')
-    ax.set_theta_direction(-1)
-    c = ax.scatter(t, r, c=chapman_coefficients[:,0], s=100., vmin=0, vmax=5.e11)
-    plt.colorbar(c, label=r'NmF2 (m$^{-3}$)')
-    ax.set_title('NmF2')
-
-    ax = fig.add_subplot(222, projection='polar')
-    ax.set_theta_zero_location('N')
-    ax.set_theta_direction(-1)
-    c = ax.scatter(t, r, c=chapman_coefficients[:,1], s=100., vmin=50, vmax=150.*1000.)
-    plt.colorbar(c, label=r'HmT (m)')
-    ax.set_title('Topside Scale Height')
-
-    ax = fig.add_subplot(223, projection='polar')
-    ax.set_theta_zero_location('N')
-    ax.set_theta_direction(-1)
-    c = ax.scatter(t, r, c=chapman_coefficients[:,2], s=100., vmin=50, vmax=150.*1000.)
-    plt.colorbar(c, label=r'HmB (m)')
-    ax.set_title('Bottomside Scale Height')
-
-    ax = fig.add_subplot(224, projection='polar')
-    ax.set_theta_zero_location('N')
-    ax.set_theta_direction(-1)
-    c = ax.scatter(t, r, c=chapman_coefficients[:,3], s=100., vmin=200.*1000., vmax=400.*1000.)
-    plt.colorbar(c, label=r'hmF2 (m)')
-    ax.set_title('hmF2')
-    plt.show()
+    # # Comment out
+    # # Polar plots to validate
+    # r = np.cos(clust_el*np.pi/180.)
+    # t = clust_az*np.pi/180.
+    #
+    # fig = plt.figure(figsize=(12,12))
+    # ax = fig.add_subplot(221, projection='polar')
+    # ax.set_theta_zero_location('N')
+    # ax.set_theta_direction(-1)
+    # c = ax.scatter(t, r, c=chapman_coefficients[:,0], s=100., vmin=0, vmax=5.e11)
+    # plt.colorbar(c, label=r'NmF2 (m$^{-3}$)')
+    # ax.set_title('NmF2')
+    #
+    # ax = fig.add_subplot(222, projection='polar')
+    # ax.set_theta_zero_location('N')
+    # ax.set_theta_direction(-1)
+    # c = ax.scatter(t, r, c=chapman_coefficients[:,1], s=100., vmin=50, vmax=150.*1000.)
+    # plt.colorbar(c, label=r'HmT (m)')
+    # ax.set_title('Topside Scale Height')
+    #
+    # ax = fig.add_subplot(223, projection='polar')
+    # ax.set_theta_zero_location('N')
+    # ax.set_theta_direction(-1)
+    # c = ax.scatter(t, r, c=chapman_coefficients[:,2], s=100., vmin=50, vmax=150.*1000.)
+    # plt.colorbar(c, label=r'HmB (m)')
+    # ax.set_title('Bottomside Scale Height')
+    #
+    # ax = fig.add_subplot(224, projection='polar')
+    # ax.set_theta_zero_location('N')
+    # ax.set_theta_direction(-1)
+    # c = ax.scatter(t, r, c=chapman_coefficients[:,3], s=100., vmin=200.*1000., vmax=400.*1000.)
+    # plt.colorbar(c, label=r'hmF2 (m)')
+    # ax.set_title('hmF2')
+    # plt.show()
 
     # for i in range(len(r)):
     #     ax.annotate(str(i), (t[i], r[i]))
 
     avg_coeffs = np.nanmean(chapman_coefficients, axis=0)
-    print(avg_coeffs)
+    # print(avg_coeffs)
 
-    ai = np.arange(100., 700., 1.)*1000.
-    di = chapman_piecewise(np.arange(100., 700., 1.)*1000., *avg_coeffs)
-    plt.plot(ai, di, color='orange')
-    plt.xlabel('Altitude (m)')
-    plt.ylabel(r'Electron Density (m$^{-3}$)')
-    plt.show()
+    # ai = np.arange(100., 700., 1.)*1000.
+    # di = chapman_piecewise(np.arange(100., 700., 1.)*1000., *avg_coeffs)
+    # plt.plot(ai, di, color='orange')
+    # plt.xlabel('Altitude (m)')
+    # plt.ylabel(r'Electron Density (m$^{-3}$)')
+    # plt.show()
 
 
     # 2D RBF interpolation
@@ -260,14 +260,14 @@ def interp_amisr(amisr_file, iso_time, coords):
 
     # Replace with custom RBF interpolator?
     # This might allow more efficiency/customization
-    print(np.array([x,y]).shape, chapman_coefficients[:,0].shape)
+    # print(np.array([x,y]).shape, chapman_coefficients[:,0].shape)
     interp = RBFInterpolator(np.array([xp,yp]).T, dp)
     dflat = interp(np.array([newxgrid.flatten(), newygrid.flatten()]).T)
     dgrid = dflat.reshape(newxgrid.shape)
-    print(newzgrid.shape, dgrid.shape)
+    # print(newzgrid.shape, dgrid.shape)
 
     interp_dens = chapman_piecewise(newzgrid, dgrid, avg_coeffs[1], avg_coeffs[2], avg_coeffs[3])
-    print(interp_dens.shape)
+    # print(interp_dens.shape)
 
     # # fig, ax = plt.subplots()
     # fig = plt.figure(figsize=(15,7))
