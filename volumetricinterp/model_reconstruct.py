@@ -230,15 +230,15 @@ def interp_amisr(amisr_file, iso_time, coords):
 
     r = np.cos(clust_el*np.pi/180.)
     t = clust_az*np.pi/180.
-    x = 300/np.sin(clust_el*np.pi/180.)*r*np.sin(t)
-    y = 300/np.sin(clust_el*np.pi/180.)*r*np.cos(t)
+    x = 300.*1000./np.sin(clust_el*np.pi/180.)*r*np.sin(t)
+    y = 300.*1000./np.sin(clust_el*np.pi/180.)*r*np.cos(t)
 
 
     # Add edge points
     # Do this more rigerously with boundary conditions?
     xc = np.mean(x)
     yc = np.mean(y)
-    r = 400.0
+    r = 400.0*1000.
     th = np.linspace(0.,2*np.pi, 50, endpoint=False)
     xe = xc + r*np.cos(th)
     ye = yc + r*np.sin(th)
@@ -289,15 +289,25 @@ def interp_amisr(amisr_file, iso_time, coords):
     # fig.colorbar(p, label=r'Electron Density (m$^{-3}$)')
     # plt.show()
 
-    return interp_dens
+
+    # # Validate with plots
+    # import matplotlib.pyplot as plt
+    # for ia in range(len(newz)):
+    #     c = plt.pcolormesh(newxgrid[:,:,ia], newygrid[:,:,ia], interp_dens[:,:,ia], vmin=0., vmax=5.e11)
+    #     plt.colorbar(c)
+    #     plt.show()
+    #
+    # return interp_dens
 
 
 def main():
     amisr_file = '/Users/e30737/Desktop/Data/AMISR/RISR-N/2016/20161127.002_lp_1min-fitcal.h5'
     iso_time = '2016-11-27T22:55'
-    coords = [np.linspace(-300.,500.,50), np.linspace(-200.,600.,50), np.linspace(100., 500., 30)]
-    interp_amisr(amisr_file, iso_time, coords)
+    coords = [np.linspace(-300.,500.,50)*1000., np.linspace(-200.,600.,50)*1000., np.linspace(100., 500., 30)*1000.]
+    interp_dens = interp_amisr(amisr_file, iso_time, coords)
     # xgrid, ygrid = np.meshgrid()
+
+
 
 
 if __name__ == '__main__':
