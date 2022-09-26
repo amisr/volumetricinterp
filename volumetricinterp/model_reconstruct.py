@@ -252,7 +252,7 @@ def interp_amisr(amisr_file, iso_time, coords):
     # xgrid, ygrid = np.meshgrid(np.linspace(-1500.,1500.,50), np.linspace(-1500.,1500.,50))
     newx, newy, newz = coords
 
-    newxgrid, newygrid, newzgrid = np.meshgrid(newx, newy, newz)
+    newxgrid, newygrid, newzgrid = np.meshgrid(newx, newy, newz, indexing='ij')
 
     # # interpolate to new grid
     # interp_NmF2 = interpn((xgrid0[0,:], ygrid0[:,0]), NmF2, (newxgrid.flatten(), newygrid.flatten()), method='linear', bounds_error=False, fill_value=2.e11)
@@ -308,7 +308,7 @@ def interp_amisr(amisr_file, iso_time, coords):
 def main():
     amisr_file = '/Users/e30737/Desktop/Data/AMISR/RISR-N/2016/20161127.002_lp_1min-fitcal.h5'
     iso_time = '2016-11-27T22:55'
-    coords = [np.linspace(-300.,500.,50)*1000., np.linspace(-200.,600.,50)*1000., np.linspace(100., 500., 30)*1000.]
+    coords = [np.linspace(-300.,500.,50)*1000., np.linspace(-200.,600.,40)*1000., np.linspace(100., 500., 30)*1000.]
     interp_dens = interp_amisr(amisr_file, iso_time, coords)
     # xgrid, ygrid = np.meshgrid()
 
