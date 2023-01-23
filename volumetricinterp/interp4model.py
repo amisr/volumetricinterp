@@ -5,16 +5,11 @@
 #   non-physical artifacts.  It fits a modified Chapman profile to clusters of
 #   beams and performs a constrained 2D fit on the resulting profile parameters.
 
-import h5py
-import numpy as np
-import datetime as dt
-import pymap3d as pm
 import configparser
 import argparse
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-from mpl_toolkits import mplot3d
-import matplotlib.gridspec as gridspec
+import h5py
+import numpy as np
+import pymap3d as pm
 from scipy.optimize import curve_fit
 from scipy.spatial import Delaunay
 
