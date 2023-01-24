@@ -50,12 +50,6 @@ class BasisFunctions(object):
 
 class Interp4Model(object):
     def __init__(self, config_file):
-        # read config file
-        # filename
-        # data filter params
-        # initial guess for chapman params
-        # boundary location/values
-
         filename = self.read_config(config_file)
         self.load_datafile(filename)
         self.cluster_beams()
@@ -63,11 +57,20 @@ class Interp4Model(object):
         self.fit_2d()
         self.save_output()
 
-    def read_config(self, config_file):
+# def parse_list(s):
+#     return [float(i) for i in s.split(',')]
 
-        config = configparser.ConfigParser()
+    def read_config(self, config_file):
+        # read config file
+        # filename
+        # data filter params
+        # initial guess for chapman params
+        # boundary location/values
+        config = configparser.ConfigParser(converters={'list': lambda s: [float(i) for i in s.split(',')]})
         config.read(config_file)
         filename = config.get('DEFAULT', 'FILENAME')
+        self.boundary_value = config.getlist('DEFAULT', 'BOUNDARY_VALUE')
+        self.boundary_circle = config.getfloat('DEFAULT', 'BOUNDARY_CIRCLE')
         return filename
 
     def load_datafile(self, filename):
@@ -166,7 +169,7 @@ class Interp4Model(object):
         # simplices_colors = ['lime','cyan','red','yellow']
 
         for tidx in range(len(self.time)):
-            print(self.time[tidx])
+            print(self.time[tidx].astype('datetime64[s]'))
 
             for i, clust_index in enumerate(self.tri2):
 
@@ -246,8 +249,8 @@ class Interp4Model(object):
         #
         # N = len(self.cx)
 
-        x_const = 0.48*np.cos(np.linspace(0.,2*np.pi, 40))+self.fov_cent[0]
-        y_const = 0.48*np.sin(np.linspace(0.,2*np.pi, 40))+self.fov_cent[1]
+        x_const = self.boundary_circle*np.cos(np.linspace(0.,2*np.pi, 40))+self.fov_cent[0]
+        y_const = self.boundary_circle*np.sin(np.linspace(0.,2*np.pi, 40))+self.fov_cent[1]
         C = len(x_const)
 
         # X = list()
@@ -255,7 +258,7 @@ class Interp4Model(object):
 
         for i, chap_coeff in enumerate(self.chapman_coefficients):
 
-            for j, (vobs, const) in enumerate(zip(chap_coeff.T, [3.e11, 325000., 70000., 100000.])):
+            for j, (vobs, const) in enumerate(zip(chap_coeff.T, self.boundary_value)):
 
                 constraints = np.array([[x, y, const] for x, y in zip(x_const, y_const)])
 
@@ -284,6 +287,8 @@ class Interp4Model(object):
             h5.create_dataset('cx', data=self.cx)
             h5.create_dataset('cy', data=self.cy)
             h5.create_dataset('time', data=self.time)
+            h5.create_dataset('boundary_value', data=self.boundary_value)
+            h5.create_dataset('boundary_circle', data=self.boundary_circle)
 
 
 class CalcInterp(object):
@@ -301,6 +306,8 @@ class CalcInterp(object):
             self.cx = h5['cx'][:]
             self.cy = h5['cy'][:]
             utime = h5['time'][:]
+            self.boundary_value = h5['boundary_value'][:]
+            self.boundary_circle = h5['boundary_circle'][()]
 
         self.time = utime.astype('datetime64[s]')
 
@@ -316,10 +323,10 @@ class CalcInterp(object):
         xgrid = np.cos(elgrid)*np.sin(azgrid)
         ygrid = np.cos(elgrid)*np.cos(azgrid)
 
-        out_of_bound = np.sqrt((xgrid-self.fov_cent[0])**2 + (ygrid-self.fov_cent[1])**2)>0.48
+        out_of_bound = np.sqrt((xgrid-self.fov_cent[0])**2 + (ygrid-self.fov_cent[1])**2)>self.boundary_circle
 
         pgrid = list()
-        for x1, bc in zip(self.X[tidx], [3.e11, 325000., 70000., 100000.]):
+        for x1, bc in zip(self.X[tidx], self.boundary_value):
             pg = np.sum(np.array([x1[i]*self.rbf.Phi(i,xgrid, ygrid) for i in range(self.rbf.Nbasis)]), axis=0)
             # print(x1)
             pg[out_of_bound] = bc
