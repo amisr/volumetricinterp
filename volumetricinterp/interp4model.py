@@ -69,6 +69,7 @@ class Interp4Model(object):
         config = configparser.ConfigParser(converters={'list': lambda s: [float(i) for i in s.split(',')]})
         config.read(config_file)
         filename = config.get('DEFAULT', 'FILENAME')
+        self.output_filename = config.get('DEFAULT', 'OUTPUTFILENAME')
         self.boundary_value = config.getlist('DEFAULT', 'BOUNDARY_VALUE')
         self.boundary_circle = config.getfloat('DEFAULT', 'BOUNDARY_CIRCLE')
         return filename
@@ -169,7 +170,7 @@ class Interp4Model(object):
         # simplices_colors = ['lime','cyan','red','yellow']
 
         for tidx in range(len(self.time)):
-            print(self.time[tidx].astype('datetime64[s]'))
+            print('profile fit - ' + str(self.time[tidx].astype('datetime64[s]')))
 
             for i, clust_index in enumerate(self.tri2):
 
@@ -257,6 +258,7 @@ class Interp4Model(object):
         self.X = np.empty((len(self.time), 4, N+C))
 
         for i, chap_coeff in enumerate(self.chapman_coefficients):
+            print('2D fit - ' + str(self.time[i].astype('datetime64[s]')))
 
             for j, (vobs, const) in enumerate(zip(chap_coeff.T, self.boundary_value)):
 
@@ -270,7 +272,7 @@ class Interp4Model(object):
                 a[N:,:N] = np.array([[rbf.Phi(i,r[0],r[1]) for i in range(N)] for r in constraints])
                 b[:N] = np.array([2*np.sum(vobs*rbf.Phi(j,clust_x,clust_y)) for j in range(N)])
                 b[N:] = np.array([r[2] for r in constraints])
-                print(a.shape, b.shape)
+                # print(a.shape, b.shape)
                 # print(np.linalg.solve(a,b))
 
                 self.X[i,j,:] = np.linalg.solve(a,b)
@@ -279,9 +281,8 @@ class Interp4Model(object):
 
 # Need to output and save X and fov_cent
     def save_output(self):
-        output_filename = 'volumetric_interp_output.hdf5'
 
-        with h5py.File(output_filename, 'w') as h5:
+        with h5py.File(self.output_filename, 'w') as h5:
             h5.create_dataset('X', data=self.X)
             h5.create_dataset('fov_cent', data=self.fov_cent)
             h5.create_dataset('cx', data=self.cx)
