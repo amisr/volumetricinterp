@@ -340,6 +340,30 @@ class CalcInterp(object):
 
         return Xgrid, Ygrid, Zgrid, vgrid
 
+    def point_enu(self, targtime, epnt, npnt, upnt):
+
+        tidx = np.argmin(np.abs(self.time-targtime))
+
+        azpnt, elpnt, _ = pm.enu2aer(epnt, npnt, upnt, deg=False)
+
+        xpnt = np.cos(elpnt)*np.sin(azpnt)
+        ypng = np.cos(elpnt)*np.cos(azpnt)
+
+        out_of_bound = np.sqrt((xpnt-self.fov_cent[0])**2 + (ypnt-self.fov_cent[1])**2)>self.boundary_circle
+
+        pgrid = list()
+        for x1, bc in zip(self.X[tidx], self.boundary_value):
+            pg = np.sum(np.array([x1[i]*self.rbf.Phi(i,xgrid, ygrid) for i in range(self.rbf.Nbasis)]), axis=0)
+            # print(x1)
+            pg[out_of_bound] = bc
+            pgrid.append(pg)
+        pgrid = np.array(pgrid)
+        # pgrid = np.array([np.sum(np.array([x1[i]*Phi(i,xgrid, ygrid) for i in range(N)]), axis=0) for x1 in X])
+
+        vpnt = chapman(upnt, pgrid[0], pgrid[1], pgrid[2], pgrid[3])
+        print(vpnt.shape)
+
+        return vpnt
 
         # fig = plt.figure(figsize=(30,6))
         # gs = gridspec.GridSpec(1,5)
