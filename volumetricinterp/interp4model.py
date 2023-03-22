@@ -31,18 +31,30 @@ def chapman(z, N0, z0, HB, HT):
 
     return Ne
 
+def hav_new(az1, el1, b, d):
+    el2 = np.arcsin(np.sin(el1)*np.cos(d) + np.cos(el1)*np.sin(d)*np.cos(b))
+    az2 = az1 + np.arctan2(np.sin(b)*np.sin(d)*np.cos(el1), np.cos(d)-np.sin(el1)*np.sin(el2))
+    return az2, el2
+
 class BasisFunctions(object):
-    def __init__(self, cx, cy):
+    def __init__(self, caz, cel):
 
-        self.cx = cx
-        self.cy = cy
-        self.Nbasis = len(cx)
+        self.caz = caz
+        self.cel = cel
+        self.Nbasis = len(cel)
 
-    # Convert to solid angle???
-    def Phi(self, i, x, y):
-        r = np.sqrt((x-self.cx[i])**2 + (y-self.cy[i])**2)
+    # # Convert to solid angle???
+    # def Phi(self, i, x, y):
+    #     r = np.sqrt((x-self.cx[i])**2 + (y-self.cy[i])**2)
+    #     # return r**2*np.log10(r)
+    #     return r**3
+
+    def Phi(i, az, el):
+        a = np.sin((el-self.cel[i])/2)**2 + np.cos(el)*np.cos(self.cel[i])*np.sin((az-self.caz[i])/2)**2
+        c = 2*np.arctan2(np.sqrt(a),np.sqrt(1-a))
+        # r = np.sqrt((x-cx[i])**2 + (y-cy[i])**2)
         # return r**2*np.log10(r)
-        return r**3
+        return c**3
 
 
 
@@ -71,7 +83,9 @@ class Interp4Model(object):
         filename = config.get('DEFAULT', 'FILENAME')
         self.output_filename = config.get('DEFAULT', 'OUTPUTFILENAME')
         self.boundary_value = config.getlist('DEFAULT', 'BOUNDARY_VALUE')
-        self.boundary_circle = config.getfloat('DEFAULT', 'BOUNDARY_CIRCLE')
+        # self.boundary_circle = config.getfloat('DEFAULT', 'BOUNDARY_CIRCLE')
+        self.cent_az = config.getfloat('DEFAULT', 'CENT_AZ')
+        self.cent_el = config.getfloat('DEFAULT', 'CENT_EL')
         return filename
 
     def load_datafile(self, filename):
@@ -234,48 +248,82 @@ class Interp4Model(object):
 
         # print(np.max(clust_r), np.arccos(np.max(clust_r))*180./np.pi)
 
-        clust_x = self.clust_r*np.sin(self.clust_t)
-        clust_y = self.clust_r*np.cos(self.clust_t)
+#         clust_x = self.clust_r*np.sin(self.clust_t)
+#         clust_y = self.clust_r*np.cos(self.clust_t)
 
-        fov_xrng = [np.min(clust_x), np.max(clust_x)]
-        fov_yrng = [np.min(clust_y), np.max(clust_y)]
-        self.fov_cent = [np.mean(fov_xrng), np.mean(fov_yrng)]
+#         fov_xrng = [np.min(clust_x), np.max(clust_x)]
+#         fov_yrng = [np.min(clust_y), np.max(clust_y)]
+#         self.fov_cent = [np.mean(fov_xrng), np.mean(fov_yrng)]
 
-        xks, yks = np.meshgrid(np.linspace(fov_xrng[0],fov_xrng[1],8), np.linspace(fov_yrng[0],fov_yrng[1],8))
-        self.cx = xks.flatten()
-        self.cy = yks.flatten()
-        rbf = BasisFunctions(self.cx, self.cy)
+#         xks, yks = np.meshgrid(np.linspace(fov_xrng[0],fov_xrng[1],8), np.linspace(fov_yrng[0],fov_yrng[1],8))
+#         self.cx = xks.flatten()
+#         self.cy = yks.flatten()
+
+        caz = [self.cent_az*np.pi/180.]
+        cel = [self.cent_el*np.pi/180.]
+        circ_az, circ_el = hav_new(26.*np.pi/180., cent_el, np.arange(0., 360., 60.)*np.pi/180., np.pi/24.)
+        caz.extend(circ_az)
+        cel.extend(circ_el)
+        circ_az, circ_el = hav_new(26.*np.pi/180., cent_el, np.arange(0., 360., 45.)*np.pi/180.+np.pi/8, np.pi/12.)
+        caz.extend(circ_az)
+        cel.extend(circ_el)
+        circ_az, circ_el = hav_new(26.*np.pi/180., cent_el, np.arange(0., 360., 30.)*np.pi/180., np.pi/8.)
+        caz.extend(circ_az)
+        cel.extend(circ_el)
+        circ_az, circ_el = hav_new(26.*np.pi/180., cent_el, np.arange(0., 360., 15.)*np.pi/180.+np.pi/24, np.pi/4.5)
+        caz.extend(circ_az)
+        cel.extend(circ_el)
+
+        rbf = BasisFunctions(caz, cel)
         N = rbf.Nbasis
         #
         #
         # N = len(self.cx)
 
-        x_const = self.boundary_circle*np.cos(np.linspace(0.,2*np.pi, 40))+self.fov_cent[0]
-        y_const = self.boundary_circle*np.sin(np.linspace(0.,2*np.pi, 40))+self.fov_cent[1]
-        C = len(x_const)
+        bound_az, bound_el = hav_new(self.cent_az*np.pi/180., self.cent_el*np.pi/180., np.arange(0., 360., 10.)*np.pi/180., np.pi/5)
+
+        # x_const = self.boundary_circle*np.cos(np.linspace(0.,2*np.pi, 40))+self.fov_cent[0]
+        # y_const = self.boundary_circle*np.sin(np.linspace(0.,2*np.pi, 40))+self.fov_cent[1]
+        C = len(bound_el)
 
         # X = list()
         self.X = np.empty((len(self.time), 4, N+C))
 
-        for i, chap_coeff in enumerate(self.chapman_coefficients):
-            print('2D fit - ' + str(self.time[i].astype('datetime64[s]')))
+        for vobs, const in zip(self.chapman_coefficients.T, self.boundary_values):
 
-            for j, (vobs, const) in enumerate(zip(chap_coeff.T, self.boundary_value)):
+            constraints = np.array([[az, el, const] for az, el in zip(bound_az, bound_el)])
 
-                constraints = np.array([[x, y, const] for x, y in zip(x_const, y_const)])
+            a = np.zeros((N+C,N+C))
+            b = np.zeros(N+C)
 
-                a = np.zeros((N+C,N+C))
-                b = np.zeros(N+C)
+            a[:N,:N] = np.array([[2*np.sum(rbf.Phi(i,self.clust_t,np.arccos(self.clust_r))*rbf.Phi(j,self.clust_t,np.arccos(self.clust_r))) for i in range(N)] for j in range(N)])
+            a[:N,N:] = np.array([[-rbf.Phi(j,r[0],r[1]) for r in constraints] for j in range(N)])
+            a[N:,:N] = np.array([[rbf.Phi(i,r[0],r[1]) for i in range(N)] for r in constraints])
+            b[:N] = np.array([2*np.sum(vobs*rbf.Phi(j,self.clust_t,np.arccos(self.clust_r))) for j in range(N)])
+            b[N:] = np.array([r[2] for r in constraints])
+            print(a.shape, b.shape)
 
-                a[:N,:N] = np.array([[2*np.sum(rbf.Phi(i,clust_x,clust_y)*rbf.Phi(j,clust_x,clust_y)) for i in range(N)] for j in range(N)])
-                a[:N,N:] = np.array([[-rbf.Phi(j,r[0],r[1]) for r in constraints] for j in range(N)])
-                a[N:,:N] = np.array([[rbf.Phi(i,r[0],r[1]) for i in range(N)] for r in constraints])
-                b[:N] = np.array([2*np.sum(vobs*rbf.Phi(j,clust_x,clust_y)) for j in range(N)])
-                b[N:] = np.array([r[2] for r in constraints])
-                # print(a.shape, b.shape)
-                # print(np.linalg.solve(a,b))
+            self.X[i,j,:] = np.linalg.solve(a,b)
 
-                self.X[i,j,:] = np.linalg.solve(a,b)
+#         for i, chap_coeff in enumerate(self.chapman_coefficients):
+#             print('2D fit - ' + str(self.time[i].astype('datetime64[s]')))
+
+#             for j, (vobs, const) in enumerate(zip(chap_coeff.T, self.boundary_value)):
+
+#                 constraints = np.array([[x, y, const] for x, y in zip(x_const, y_const)])
+
+#                 a = np.zeros((N+C,N+C))
+#                 b = np.zeros(N+C)
+
+#                 a[:N,:N] = np.array([[2*np.sum(rbf.Phi(i,clust_x,clust_y)*rbf.Phi(j,clust_x,clust_y)) for i in range(N)] for j in range(N)])
+#                 a[:N,N:] = np.array([[-rbf.Phi(j,r[0],r[1]) for r in constraints] for j in range(N)])
+#                 a[N:,:N] = np.array([[rbf.Phi(i,r[0],r[1]) for i in range(N)] for r in constraints])
+#                 b[:N] = np.array([2*np.sum(vobs*rbf.Phi(j,clust_x,clust_y)) for j in range(N)])
+#                 b[N:] = np.array([r[2] for r in constraints])
+#                 # print(a.shape, b.shape)
+#                 # print(np.linalg.solve(a,b))
+
+#                 self.X[i,j,:] = np.linalg.solve(a,b)
 
         # self.X = np.array(X)
 
@@ -284,12 +332,14 @@ class Interp4Model(object):
 
         with h5py.File(self.output_filename, 'w') as h5:
             h5.create_dataset('X', data=self.X)
-            h5.create_dataset('fov_cent', data=self.fov_cent)
-            h5.create_dataset('cx', data=self.cx)
-            h5.create_dataset('cy', data=self.cy)
+            # h5.create_dataset('fov_cent', data=self.fov_cent)
+            h5.create_dataset('cent_az', data=self.cent_az)
+            h5.create_dataset('cent_el', data=self.cent_el)
+            h5.create_dataset('caz', data=self.caz)
+            h5.create_dataset('cel', data=self.cel)
             h5.create_dataset('time', data=self.time)
             h5.create_dataset('boundary_value', data=self.boundary_value)
-            h5.create_dataset('boundary_circle', data=self.boundary_circle)
+            # h5.create_dataset('boundary_circle', data=self.boundary_circle)
 
 
 class CalcInterp(object):
@@ -303,12 +353,14 @@ class CalcInterp(object):
     def load_file(self, filename):
         with h5py.File(filename, 'r') as h5:
             self.X = h5['X'][:]
-            self.fov_cent = h5['fov_cent'][:]
-            self.cx = h5['cx'][:]
-            self.cy = h5['cy'][:]
+            # self.fov_cent = h5['fov_cent'][:]
+            self.cent_az = h5['cent_az'][()]
+            self.cent_el = h5['cent_el'][()]
+            self.caz = h5['caz'][:]
+            self.cel = h5['cel'][:]
             utime = h5['time'][:]
             self.boundary_value = h5['boundary_value'][:]
-            self.boundary_circle = h5['boundary_circle'][()]
+            # self.boundary_circle = h5['boundary_circle'][()]
 
         self.time = utime.astype('datetime64[s]')
 
@@ -321,14 +373,18 @@ class CalcInterp(object):
 
         azgrid, elgrid, _ = pm.enu2aer(Xgrid, Ygrid, Zgrid, deg=False)
 
-        xgrid = np.cos(elgrid)*np.sin(azgrid)
-        ygrid = np.cos(elgrid)*np.cos(azgrid)
+        # xgrid = np.cos(elgrid)*np.sin(azgrid)
+        # ygrid = np.cos(elgrid)*np.cos(azgrid)
 
         out_of_bound = np.sqrt((xgrid-self.fov_cent[0])**2 + (ygrid-self.fov_cent[1])**2)>self.boundary_circle
 
+        a = np.sin((elgrid-self.cent_el)/2)**2 + np.cos(elgrid)*np.cos(self.cent_el)*np.sin((azgrid-self.cent_az)/2)**2
+        c = 2*np.arctan2(np.sqrt(a),np.sqrt(1-a))
+        out_of_bound = c>np.pi/5
+
         pgrid = list()
         for x1, bc in zip(self.X[tidx], self.boundary_value):
-            pg = np.sum(np.array([x1[i]*self.rbf.Phi(i,xgrid, ygrid) for i in range(self.rbf.Nbasis)]), axis=0)
+            pg = np.sum(np.array([x1[i]*self.rbf.Phi(i,azgrid, elgrid) for i in range(self.rbf.Nbasis)]), axis=0)
             # print(x1)
             pg[out_of_bound] = bc
             pgrid.append(pg)
@@ -364,6 +420,13 @@ class CalcInterp(object):
         print(vpnt.shape)
 
         return vpnt
+
+    def point_geodetic(self, targtime, lat, lon, alt):
+
+        tidx = np.argmin(np.abs(self.time-targtime))
+
+        azpnt, elpnt, _ = pm.geodetic2aer(lat, lon, h, lat0, lon0, h0)
+        # azpnt, elpnt, _ = pm.enu2aer(epnt, npnt, upnt, deg=False)
 
         # fig = plt.figure(figsize=(30,6))
         # gs = gridspec.GridSpec(1,5)
