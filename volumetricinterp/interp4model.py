@@ -49,7 +49,7 @@ class BasisFunctions(object):
     #     # return r**2*np.log10(r)
     #     return r**3
 
-    def Phi(i, az, el):
+    def Phi(self, i, az, el):
         a = np.sin((el-self.cel[i])/2)**2 + np.cos(el)*np.cos(self.cel[i])*np.sin((az-self.caz[i])/2)**2
         c = 2*np.arctan2(np.sqrt(a),np.sqrt(1-a))
         # r = np.sqrt((x-cx[i])**2 + (y-cy[i])**2)
@@ -86,6 +86,8 @@ class Interp4Model(object):
         # self.boundary_circle = config.getfloat('DEFAULT', 'BOUNDARY_CIRCLE')
         self.cent_az = config.getfloat('DEFAULT', 'CENT_AZ')
         self.cent_el = config.getfloat('DEFAULT', 'CENT_EL')
+        self.starttime = config.get('DEFAULT', 'STARTTIME')
+        self.endtime = config.get('DEFAULT', 'ENDTIME')
         return filename
 
     def load_datafile(self, filename):
@@ -156,8 +158,8 @@ class Interp4Model(object):
 
         # Find center of each cluster
         clust_points = np.mean(points[self.tri2, :], axis=1)
-        self.clust_r = np.sqrt(clust_points[:,0]**2 + clust_points[:,1]**2)
-        self.clust_t = np.arctan2(clust_points[:,0], clust_points[:,1])
+        self.clust_el = np.arccos(np.sqrt(clust_points[:,0]**2 + clust_points[:,1]**2))
+        self.clust_az = np.arctan2(clust_points[:,0], clust_points[:,1])
 
 # # Plot
 # fig = plt.figure(figsize=(15,15))
@@ -179,11 +181,19 @@ class Interp4Model(object):
 
     def fit_profiles(self):
 
-        self.chapman_coefficients = np.empty((len(self.time),len(self.tri2),4))
+        # self.chapman_coefficients = np.empty((len(self.time),len(self.tri2),4))
         # plot_simplices = [50,29,18,25]
         # simplices_colors = ['lime','cyan','red','yellow']
+        
+        # print(self.time, np.datetime64(self.starttime).astype('int'))
+        
+        
+        stidx = np.argmin(np.abs(self.time-np.datetime64(self.starttime).astype('int')))
+        etidx = np.argmin(np.abs(self.time-np.datetime64(self.endtime).astype('int')))
+        self.chapman_coefficients = np.empty((etidx-stidx,len(self.tri2),4))
 
-        for tidx in range(len(self.time)):
+        # for tidx in range(len(self.time)):
+        for tidx in range(stidx, etidx):
             print('profile fit - ' + str(self.time[tidx].astype('datetime64[s]')))
 
             for i, clust_index in enumerate(self.tri2):
@@ -205,7 +215,7 @@ class Interp4Model(object):
                 except RuntimeError:
                     coeffs = [np.nan, np.nan, np.nan, np.nan]
 
-                self.chapman_coefficients[tidx,i] = np.array(coeffs)
+                self.chapman_coefficients[tidx-stidx,i] = np.array(coeffs)
                 # chapman_coefficients.append(coeffs)
 
                 # if i in plot_simplices:
@@ -261,21 +271,24 @@ class Interp4Model(object):
 
         caz = [self.cent_az*np.pi/180.]
         cel = [self.cent_el*np.pi/180.]
-        circ_az, circ_el = hav_new(26.*np.pi/180., cent_el, np.arange(0., 360., 60.)*np.pi/180., np.pi/24.)
+        circ_az, circ_el = hav_new(self.cent_az*np.pi/180., self.cent_el*np.pi/180., np.arange(0., 360., 60.)*np.pi/180., np.pi/24.)
         caz.extend(circ_az)
         cel.extend(circ_el)
-        circ_az, circ_el = hav_new(26.*np.pi/180., cent_el, np.arange(0., 360., 45.)*np.pi/180.+np.pi/8, np.pi/12.)
+        circ_az, circ_el = hav_new(self.cent_az*np.pi/180., self.cent_el*np.pi/180., np.arange(0., 360., 45.)*np.pi/180.+np.pi/8, np.pi/12.)
         caz.extend(circ_az)
         cel.extend(circ_el)
-        circ_az, circ_el = hav_new(26.*np.pi/180., cent_el, np.arange(0., 360., 30.)*np.pi/180., np.pi/8.)
+        circ_az, circ_el = hav_new(self.cent_az*np.pi/180., self.cent_el*np.pi/180., np.arange(0., 360., 30.)*np.pi/180., np.pi/8.)
         caz.extend(circ_az)
         cel.extend(circ_el)
-        circ_az, circ_el = hav_new(26.*np.pi/180., cent_el, np.arange(0., 360., 15.)*np.pi/180.+np.pi/24, np.pi/4.5)
+        circ_az, circ_el = hav_new(self.cent_az*np.pi/180., self.cent_el*np.pi/180., np.arange(0., 360., 15.)*np.pi/180.+np.pi/24, np.pi/4.5)
         caz.extend(circ_az)
         cel.extend(circ_el)
 
         rbf = BasisFunctions(caz, cel)
         N = rbf.Nbasis
+        
+        self.caz = caz
+        self.cel = cel
         #
         #
         # N = len(self.cx)
@@ -287,23 +300,31 @@ class Interp4Model(object):
         C = len(bound_el)
 
         # X = list()
-        self.X = np.empty((len(self.time), 4, N+C))
+        
+        stidx = np.argmin(np.abs(self.time-np.datetime64(self.starttime).astype('int')))
+        etidx = np.argmin(np.abs(self.time-np.datetime64(self.endtime).astype('int')))
 
-        for vobs, const in zip(self.chapman_coefficients.T, self.boundary_values):
+        self.X = np.empty((etidx-stidx, 4, N+C))
+        print(self.chapman_coefficients.shape)
 
-            constraints = np.array([[az, el, const] for az, el in zip(bound_az, bound_el)])
+        for m, chap_coeff in enumerate(self.chapman_coefficients):
+            print('2D fit - ' + str(self.time[stidx+m].astype('datetime64[s]')))
 
-            a = np.zeros((N+C,N+C))
-            b = np.zeros(N+C)
+            for n, (vobs, const) in enumerate(zip(chap_coeff.T, self.boundary_value)):
 
-            a[:N,:N] = np.array([[2*np.sum(rbf.Phi(i,self.clust_t,np.arccos(self.clust_r))*rbf.Phi(j,self.clust_t,np.arccos(self.clust_r))) for i in range(N)] for j in range(N)])
-            a[:N,N:] = np.array([[-rbf.Phi(j,r[0],r[1]) for r in constraints] for j in range(N)])
-            a[N:,:N] = np.array([[rbf.Phi(i,r[0],r[1]) for i in range(N)] for r in constraints])
-            b[:N] = np.array([2*np.sum(vobs*rbf.Phi(j,self.clust_t,np.arccos(self.clust_r))) for j in range(N)])
-            b[N:] = np.array([r[2] for r in constraints])
-            print(a.shape, b.shape)
+                constraints = np.array([[az, el, const] for az, el in zip(bound_az, bound_el)])
 
-            self.X[i,j,:] = np.linalg.solve(a,b)
+                a = np.zeros((N+C,N+C))
+                b = np.zeros(N+C)
+
+                a[:N,:N] = np.array([[2*np.sum(rbf.Phi(i,self.clust_az,self.clust_el)*rbf.Phi(j,self.clust_az,self.clust_el)) for i in range(N)] for j in range(N)])
+                a[:N,N:] = np.array([[-rbf.Phi(j,r[0],r[1]) for r in constraints] for j in range(N)])
+                a[N:,:N] = np.array([[rbf.Phi(i,r[0],r[1]) for i in range(N)] for r in constraints])
+                b[:N] = np.array([2*np.sum(vobs*rbf.Phi(j,self.clust_az,self.clust_el)) for j in range(N)])
+                b[N:] = np.array([r[2] for r in constraints])
+                # print(a.shape, b.shape)
+
+                self.X[m,n,:] = np.linalg.solve(a,b)
 
 #         for i, chap_coeff in enumerate(self.chapman_coefficients):
 #             print('2D fit - ' + str(self.time[i].astype('datetime64[s]')))
@@ -330,6 +351,9 @@ class Interp4Model(object):
 # Need to output and save X and fov_cent
     def save_output(self):
 
+        stidx = np.argmin(np.abs(self.time-np.datetime64(self.starttime).astype('int')))
+        etidx = np.argmin(np.abs(self.time-np.datetime64(self.endtime).astype('int')))
+
         with h5py.File(self.output_filename, 'w') as h5:
             h5.create_dataset('X', data=self.X)
             # h5.create_dataset('fov_cent', data=self.fov_cent)
@@ -337,7 +361,7 @@ class Interp4Model(object):
             h5.create_dataset('cent_el', data=self.cent_el)
             h5.create_dataset('caz', data=self.caz)
             h5.create_dataset('cel', data=self.cel)
-            h5.create_dataset('time', data=self.time)
+            h5.create_dataset('time', data=self.time[stidx:etidx])
             h5.create_dataset('boundary_value', data=self.boundary_value)
             # h5.create_dataset('boundary_circle', data=self.boundary_circle)
 
@@ -347,7 +371,7 @@ class CalcInterp(object):
 
         self.load_file(filename)
 
-        self.rbf = BasisFunctions(self.cx, self.cy)
+        self.rbf = BasisFunctions(self.caz, self.cel)
 
 
     def load_file(self, filename):
@@ -368,6 +392,7 @@ class CalcInterp(object):
     def grid_enu(self, targtime, xrng, yrng, zrng):
 
         tidx = np.argmin(np.abs(self.time-targtime))
+        print(self.time[tidx])
 
         Xgrid, Ygrid, Zgrid = np.meshgrid(xrng, yrng, zrng)
 
@@ -376,9 +401,9 @@ class CalcInterp(object):
         # xgrid = np.cos(elgrid)*np.sin(azgrid)
         # ygrid = np.cos(elgrid)*np.cos(azgrid)
 
-        out_of_bound = np.sqrt((xgrid-self.fov_cent[0])**2 + (ygrid-self.fov_cent[1])**2)>self.boundary_circle
+        # out_of_bound = np.sqrt((xgrid-self.fov_cent[0])**2 + (ygrid-self.fov_cent[1])**2)>self.boundary_circle
 
-        a = np.sin((elgrid-self.cent_el)/2)**2 + np.cos(elgrid)*np.cos(self.cent_el)*np.sin((azgrid-self.cent_az)/2)**2
+        a = np.sin((elgrid-self.cent_el*np.pi/180.)/2)**2 + np.cos(elgrid)*np.cos(self.cent_el*np.pi/180.)*np.sin((azgrid-self.cent_az*np.pi/180.)/2)**2
         c = 2*np.arctan2(np.sqrt(a),np.sqrt(1-a))
         out_of_bound = c>np.pi/5
 
