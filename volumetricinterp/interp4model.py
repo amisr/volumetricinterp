@@ -427,8 +427,6 @@ class CalcInterp(object):
 
         azpnt, elpnt, _ = pm.enu2aer(epnt, npnt, upnt, deg=False)
 
-        #xpnt = np.cos(elpnt)*np.sin(azpnt)
-        #ypng = np.cos(elpnt)*np.cos(azpnt)
 
         #out_of_bound = np.sqrt((xpnt-self.fov_cent[0])**2 + (ypnt-self.fov_cent[1])**2)>self.boundary_circle
 
@@ -450,11 +448,11 @@ class CalcInterp(object):
 
         return vpnt
 
-    def point_geodetic(self, targtime, lat, lon, alt):
+   # def point_geodetic(self, targtime, lat, lon, alt):
 
-        tidx = np.argmin(np.abs(self.time-targtime))
+       # tidx = np.argmin(np.abs(self.time-targtime))
 
-        azpnt, elpnt, _ = pm.geodetic2aer(lat, lon, h, lat0, lon0, h0)
+       # azpnt, elpnt, _ = pm.geodetic2aer(lat, lon, h, lat0, lon0, h0)
         # azpnt, elpnt, _ = pm.enu2aer(epnt, npnt, upnt, deg=False)
 
         # fig = plt.figure(figsize=(30,6))
