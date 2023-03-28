@@ -427,14 +427,18 @@ class CalcInterp(object):
 
         azpnt, elpnt, _ = pm.enu2aer(epnt, npnt, upnt, deg=False)
 
-        xpnt = np.cos(elpnt)*np.sin(azpnt)
-        ypng = np.cos(elpnt)*np.cos(azpnt)
+        #xpnt = np.cos(elpnt)*np.sin(azpnt)
+        #ypng = np.cos(elpnt)*np.cos(azpnt)
 
-        out_of_bound = np.sqrt((xpnt-self.fov_cent[0])**2 + (ypnt-self.fov_cent[1])**2)>self.boundary_circle
+        #out_of_bound = np.sqrt((xpnt-self.fov_cent[0])**2 + (ypnt-self.fov_cent[1])**2)>self.boundary_circle
+
+        a = np.sin((elpnt-self.cent_el*np.pi/180.)/2)**2 + np.cos(elpnt)*np.cos(self.cent_el*np.pi/180.)*np.sin((azpnt-self.cent_az*np.pi/180.)/2)**2
+        c = 2*np.arctan2(np.sqrt(a),np.sqrt(1-a))
+        out_of_bound = c>np.pi/5
 
         pgrid = list()
         for x1, bc in zip(self.X[tidx], self.boundary_value):
-            pg = np.sum(np.array([x1[i]*self.rbf.Phi(i,xgrid, ygrid) for i in range(self.rbf.Nbasis)]), axis=0)
+            pg = np.sum(np.array([x1[i]*self.rbf.Phi(i, azpnt, elpnt) for i in range(self.rbf.Nbasis)]), axis=0)
             # print(x1)
             pg[out_of_bound] = bc
             pgrid.append(pg)
