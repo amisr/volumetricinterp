@@ -427,7 +427,21 @@ class CalcInterp(object):
 
         azpnt, elpnt, _ = pm.enu2aer(epnt, npnt, upnt, deg=False)
 
-        #out_of_bound = np.sqrt((xpnt-self.fov_cent[0])**2 + (ypnt-self.fov_cent[1])**2)>self.boundary_circle
+        vpnt = calc_point_arr(tidx, azpnt, elpnt)
+
+        return vpnt
+
+    def point_geodetic(self, targtime, lat, lon, alt):
+
+        tidx = np.argmin(np.abs(self.time-targtime))
+
+        azpnt, elpnt, _ = pm.geodetic2aer(lat, lon, h, lat0, lon0, h0, deg=False)
+
+        vpnt = calc_point_arr(tidx, azpnt, elpnt)
+
+        return vpnt
+ 
+    def calc_point_arr(tidx, azpnt, elpnt):
 
         a = np.sin((elpnt-self.cent_el*np.pi/180.)/2)**2 + np.cos(elpnt)*np.cos(self.cent_el*np.pi/180.)*np.sin((azpnt-self.cent_az*np.pi/180.)/2)**2
         c = 2*np.arctan2(np.sqrt(a),np.sqrt(1-a))
@@ -448,27 +462,6 @@ class CalcInterp(object):
         print(vpnt.shape)
 
         return vpnt
-
-   # def point_geodetic(self, targtime, lat, lon, alt):
-
-       # tidx = np.argmin(np.abs(self.time-targtime))
-
-       # azpnt, elpnt, _ = pm.geodetic2aer(lat, lon, h, lat0, lon0, h0)
-        # azpnt, elpnt, _ = pm.enu2aer(epnt, npnt, upnt, deg=False)
-
-        # fig = plt.figure(figsize=(30,6))
-        # gs = gridspec.GridSpec(1,5)
-        # for i in range(5):
-        #     ax = fig.add_subplot(gs[i])
-        #     aidx = 10*i+10
-        #     c = ax.pcolormesh(Xgrid[:,:,aidx]/1000., Ygrid[:,:,aidx]/1000., vgrid[:,:,aidx], vmin=0., vmax=5.e11)
-        #     # ax.pcolormesh(Xgrid[:,:,2*i], Ygrid[:,:,2*i], elgrid2[:,:,2*i]*180./np.pi, vmin=0., vmax=90.)
-        #     ax.set_title('Alt = {} km'.format(int(Zgrid[0,0,aidx]/1000.)))
-        #     ax.set_aspect('equal')
-        # # cax = fig.add_axes([0.91, 0.15, 0.02, 0.7])
-        # # fig.colorbar(c, cax=cax, label=r'Electron Density (m$^{-3}$)')
-        # # plt.savefig(figure_ouput_dir+'alt_slice.png', bbox_inches='tight')
-        # plt.show()
 
 
 def main():
