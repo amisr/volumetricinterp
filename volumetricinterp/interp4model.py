@@ -427,7 +427,7 @@ class CalcInterp(object):
 
         azpnt, elpnt, _ = pm.enu2aer(epnt, npnt, upnt, deg=False)
 
-        vpnt = calc_point_arr(tidx, azpnt, elpnt)
+        vpnt = self.calc_point_arr(tidx, azpnt, elpnt, upnt)
 
         return vpnt
 
@@ -437,11 +437,11 @@ class CalcInterp(object):
 
         azpnt, elpnt, _ = pm.geodetic2aer(lat, lon, h, lat0, lon0, h0, deg=False)
 
-        vpnt = calc_point_arr(tidx, azpnt, elpnt)
+        vpnt = self.calc_point_arr(tidx, azpnt, elpnt, alt)
 
         return vpnt
  
-    def calc_point_arr(tidx, azpnt, elpnt):
+    def calc_point_arr(self, tidx, azpnt, elpnt, upnt):
 
         a = np.sin((elpnt-self.cent_el*np.pi/180.)/2)**2 + np.cos(elpnt)*np.cos(self.cent_el*np.pi/180.)*np.sin((azpnt-self.cent_az*np.pi/180.)/2)**2
         c = 2*np.arctan2(np.sqrt(a),np.sqrt(1-a))
