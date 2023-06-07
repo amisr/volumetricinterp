@@ -95,9 +95,12 @@ class Interp4Model(object):
         self.dens[bad_data] = np.nan
         self.dens_err[bad_data] = np.nan
 
+        # find indices for start and end times
         stidx = np.argmin(np.abs(self.time-np.datetime64(starttime).astype('int')))
         etidx = np.argmin(np.abs(self.time-np.datetime64(endtime).astype('int')))
         self.tidx_rng = [stidx, etidx]
+
+        self.site_coords = np.array([site_lat, site_lon, site_alt])
 
     def cluster_beams(self):
 
@@ -202,7 +205,7 @@ class Interp4Model(object):
 
         with h5py.File(self.output_filename, 'w') as h5:
             h5.create_dataset('X', data=self.X)
-            # h5.create_dataset('fov_cent', data=self.fov_cent)
+            h5.create_dataset('site_coords', data=self.site_coords)
             h5.create_dataset('cent_az', data=self.cent_az)
             h5.create_dataset('cent_el', data=self.cent_el)
             h5.create_dataset('caz', data=self.caz)
@@ -222,7 +225,7 @@ class CalcInterp(object):
     def load_file(self, filename):
         with h5py.File(filename, 'r') as h5:
             self.X = h5['X'][:]
-            # self.fov_cent = h5['fov_cent'][:]
+            self.site_coords = h5['site_coords'][:]
             self.cent_az = h5['cent_az'][()]
             self.cent_el = h5['cent_el'][()]
             self.caz = h5['caz'][:]
@@ -271,9 +274,9 @@ class CalcInterp(object):
 
         tidx = np.argmin(np.abs(self.time-targtime))
 
-        azpnt, elpnt, _ = pm.geodetic2aer(lat, lon, h, lat0, lon0, h0, deg=False)
+        azpnt, elpnt, _ = pm.geodetic2aer(lat, lon, alt, self.site_coords[0], self.site_coords[1], self.site_coords[2])
 
-        vpnt = self.calc_point_arr(tidx, azpnt, elpnt, alt)
+        vpnt = self.calc_point_arr(tidx, np.deg2rad(azpnt), np.deg2rad(elpnt), alt)
 
         return vpnt
  
