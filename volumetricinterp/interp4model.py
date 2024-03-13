@@ -38,6 +38,8 @@ def hav_new(az1, el1, b, d):
     az2 = az1 + np.arctan2(np.sin(b)*np.sin(d)*np.cos(el1), np.cos(d)-np.sin(el1)*np.sin(el2))
     return az2, el2
 
+
+
 class BasisFunctions(object):
     def __init__(self, caz, cel):
 
@@ -157,7 +159,7 @@ class Interp4Model(object):
                     # NOTE: Use pcov optional output to estimate errors on these parameters and use them in the 2D fit
                     coeffs, cov = curve_fit(chapman, a[good_data], d[good_data], sigma=dd[good_data], p0=[4.e11,300.*1000.,50.*1000.,100.*1000.], bounds=[[0.,0.,0.,0.],[np.inf,np.inf,np.inf,np.inf]], absolute_sigma=True)
                     errs = np.sqrt(np.diag(cov))
-                except RuntimeError:
+                except (ValueError, RuntimeError):
                     coeffs = [np.nan, np.nan, np.nan, np.nan]
                     errs = [np.nan, np.nan, np.nan, np.nan]
 
