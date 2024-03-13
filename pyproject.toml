@@ -1,3 +1,124 @@
 [build-system]
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
+
+[project]
+
+name = "volumetricinterp"
+version = "1.0.0"
+authors = [
+  { name="L. Lamarche", email="leslie.lamarche@sri.com" },
+]
+description = "Tool for interpolating 3D electron density from from AMISR data."
+readme = "README.rst"
+license = { file = "LICENSE" }
+keywords = ["AMISR", "interpolation", "data"]
+requires-python = ">=3.9"
+dependencies = [
+    "numpy",
+    "scipy",
+    "h5py",
+    "pymap3d",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License (GPL)",
+    "Natural Language :: English",
+    "Programming Language :: Python",
+    "Operating System :: OS Independent",
+]
+
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+#[tool.setuptools.package-data]
+#amisrsynthdata = ["beamcodes/*.txt"]
+
+[project.optional-dependencies]
+plots = ["matplotlib"]
+
+[project.urls]
+"Homepage" = "https://github.com/amisr/volumetricinterp"
+"Bug Tracker" = "https://github.com/amisr/volumetricinterp/issues"
+
+[project.scripts]
+    volumetricinterp = "volumetricinterp.interp4model:main"
+
+[tool.pytest.ini_options]
+pythonpath = [
+  "src"
+]
+addopts = [
+    "--import-mode=importlib",
+]
+
+#[options]
+#packages = find:
+#install_requires =
+#    numpy >= 1.16
+#    ; pytables >= 3.3.0
+#    h5py >=2.9.0
+#    scipy >= 1.2
+#    pymap3d >= 1.8.0
+#
+#[options.entry_points]
+#console_scripts =
+#    volumetricinterp = volumetricinterp.interp4model:main
+#
+#
+#
+#
+#name = "amisrsynthdata"
+#version = "1.1.2"
+#authors = [
+#  { name="L. Lamarche", email="leslie.lamarche@sri.com" },
+#]
+#description = "Tool for generating synthetic AMISR data files."
+#readme = "README.rst"
+#license = { file = "LICENSE" }
+#keywords = ["AMISR", "synthetic", "data"]
+#requires-python = ">=3.7"
+#dependencies = [
+#    "numpy",
+#    "h5py",
+#    "pymap3d",
+#    "pyyaml",
+#    "importlib_resources; python_version < '3.9'",
+#]
+#classifiers = [
+#    "Programming Language :: Python :: 3",
+#    "Topic :: Scientific/Engineering",
+#    "Intended Audience :: Science/Research",
+#    "License :: OSI Approved :: GNU General Public License (GPL)",
+#    "Natural Language :: English",
+#    "Programming Language :: Python",
+#    "Operating System :: OS Independent",
+#]
+#
+#[tool.setuptools.packages.find]
+#where = ["src"]
+#
+#[tool.setuptools.package-data]
+#amisrsynthdata = ["beamcodes/*.txt"]
+#
+#[project.optional-dependencies]
+#plots = ["matplotlib", "cartopy"]
+#apex = ["apexpy"]
+#
+#[project.urls]
+#"Homepage" = "https://github.com/amisr/amisrsynthdata"
+#"Bug Tracker" = "https://github.com/amisr/amisrsynthdata/issues"
+#
+#[project.scripts]
+#    amisrsynthdata = "amisrsynthdata.syntheticdata:main"
+#
+#[tool.pytest.ini_options]
+#pythonpath = [
+#  "src"
+#]
+#addopts = [
+#    "--import-mode=importlib",
+#]
